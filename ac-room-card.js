@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.15.0";
+const VERSION = "0.15.1";
 
 const T = {
   today: "Hoy",
@@ -233,7 +233,8 @@ class AcRoomCard extends HTMLElement {
       (label === null ? "" : `<span class="label">${label}</span>`) +
       `<span class="value"></span>` +
       (withWindow
-        ? `<ha-icon class="win"></ha-icon>` +
+        ? `<span class="winwrap"><ha-icon class="win"></ha-icon>` +
+          `<span class="batdot"></span></span>` +
           `<ha-icon class="tempicon" icon="mdi:thermometer"></ha-icon>` +
           `<span class="temp"></span>` +
           `<span class="fanslot"></span>` +
@@ -330,7 +331,11 @@ class AcRoomCard extends HTMLElement {
     const dot = this._rows.power.querySelector(".batdot");
     const w = this._windowState();
     let windowOpen = false;
-    if (!w.lista.length) {
+    if (!wrap || !win || !dot) {
+      // Nunca deberia pasar; si pasa, es preferible perder el icono de
+      // ventana antes que abortar _update y dejar el card entero en blanco.
+      windowOpen = w.abiertas > 0;
+    } else if (!w.lista.length) {
       wrap.style.display = "none";
     } else {
       wrap.style.display = "";

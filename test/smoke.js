@@ -6,7 +6,20 @@ function makeEl(tag) {
     appendChild(c) { this.children.push(c); return c; },
     setAttribute(k, v) { this._attrs[k] = v; },
     getAttribute(k) { return this._attrs[k]; },
-    querySelector(sel) { return this._q[sel] || (this._q[sel] = makeEl("stub")); },
+    // El shim devolvia un stub para CUALQUIER selector, existiera o no en el
+    // DOM. Eso dejo pasar un bug que blanqueaba el card entero: un
+    // querySelector que en el navegador daba null. Ahora, si el elemento se
+    // construyo por innerHTML, se comprueba que la clase o el tag esten ahi.
+    querySelector(sel) {
+      if (typeof this.innerHTML === "string" && this.innerHTML.length) {
+        const cls = /\.([\w-]+)/.exec(sel);
+        const existe = cls
+          ? new RegExp('class="[^"]*\\b' + cls[1] + '\\b').test(this.innerHTML)
+          : this.innerHTML.includes("<" + sel.split(/[.\[\s:]/)[0]);
+        if (!existe) return null;
+      }
+      return this._q[sel] || (this._q[sel] = makeEl("stub"));
+    },
     addEventListener(ev, fn) { (this._ev = this._ev || {})[ev] = fn; },
     click() { this._ev && this._ev.click && this._ev.click(); },
     classList: {
@@ -89,6 +102,11 @@ ok("tooltip lista la ventana y su estado", /Abierta/.test(win().getAttribute("ti
 ok("aviso apagado por defecto",     c._rows.warn.style.display === "none", c._rows.warn.style.display);
 ok("NO se dibuja la etiqueta Potencia", !/class="label"/.test(c._rows.power.innerHTML), c._rows.power.innerHTML);
 ok("fila principal marcada .main",  c._rows.power.className === "row main", c._rows.power.className);
+// Guarda contra el bug de 0.15.0: si el markup no trae estos elementos,
+// _update() revienta en la primera linea y el card queda en blanco entero.
+for (const sel of [".picon", ".value", ".win", ".winwrap", ".batdot", ".tempicon", ".temp", ".fanslot", ".fmslot"]) {
+  ok("la fila principal contiene " + sel, c._rows.power.querySelector(sel) !== null, c._rows.power.innerHTML);
+}
 
 console.log("\n--- caso 1e: temperatura a la derecha de la ventana");
 c = mk({ entity: "climate.dorm", power_entity: "sensor.pot",
