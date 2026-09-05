@@ -1,10 +1,9 @@
 # AC Room Card
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
-le agrega, debajo, las filas que a un aire acondicionado le faltan: **potencia
-instantanea**, **energia consumida** y el **sensor de ventana** de la pieza.
-
-Si la ventana esta abierta *y* el aire esta andando, muestra un aviso.
+le agrega, debajo, una linea compacta con la **potencia instantanea** y, al
+lado, el **simbolo de la ventana** de la pieza: **verde si esta cerrada, rojo si
+esta abierta**. Opcionalmente una segunda linea con la energia consumida.
 
 No copia codigo de Home Assistant. Instancia el card integrado en tiempo de
 ejecucion via `loadCardHelpers()`, asi que hereda su comportamiento, sus
@@ -31,9 +30,9 @@ type: custom:ac-room-card
 entity: climate.dormitorio
 name: Dorm
 power_entity: sensor.ac_dorm_potencia
-energy_today_entity: sensor.ac_dorm_energy_daily
-energy_month_entity: sensor.ac_dorm_energy_monthly
 window_entity: binary_sensor.ventana_dorm_contact
+energy_today_entity: sensor.ac_dorm_energy_daily   # opcional
+energy_month_entity: sensor.ac_dorm_energy_monthly # opcional
 features:
   - type: climate-fan-modes
     style: dropdown
@@ -49,13 +48,18 @@ features:
 | `power_entity` | string | no | Sensor de potencia (W). |
 | `energy_today_entity` | string | no | Sensor de energia del dia. |
 | `energy_month_entity` | string | no | Sensor de energia del mes. |
-| `window_entity` | string | no | `binary_sensor` de la ventana. `on` = abierta. |
+| `window_entity` | string | no | `binary_sensor` de la ventana. `on` = abierta (rojo), `off` = cerrada (verde). Se dibuja en la misma linea de la potencia. |
+| `show_warning` | bool | no | `false` por defecto. Si lo activas, agrega un aviso de texto cuando la ventana esta abierta *y* el aire andando. El icono rojo ya cubre el caso, por eso viene apagado. |
 | `base_card` | map | no | Config completa del card que va arriba. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
 | `features` | list | no | Se pasa tal cual al `thermostat` integrado. Se ignora si usas `base_card`. |
 | `labels` | map | no | Sobrescribe los textos (`power`, `today`, `month`, `window`, `open`, `closed`, `warn`, `unavailable`). |
 
-Cada fila se oculta sola si no le pasas su entidad, asi que sirve igual en una
-pieza que tiene los tres sensores y en una que solo tiene potencia.
+Cada cosa se oculta sola si no le pasas su entidad: sin `window_entity` no hay
+icono, sin `power_entity` no hay numero, sin sensores de energia no hay segunda
+linea. Sirve igual en una pieza que tiene todo y en una que solo tiene potencia.
+
+Los colores salen de las variables del tema (`--success-color`, `--error-color`),
+asi que respetan el tema claro/oscuro.
 
 ### Envolver otro card como base
 

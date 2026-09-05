@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 const T = {
   power: "Potencia",
@@ -116,9 +116,8 @@ class AcRoomCard extends HTMLElement {
     footer.className = "footer";
     card.appendChild(footer);
 
-    this._rows.power = this._addRow(footer, "mdi:flash", cfg.labels.power);
+    this._rows.power = this._addRow(footer, "mdi:flash", cfg.labels.power, true);
     this._rows.energy = this._addRow(footer, "mdi:lightning-bolt-outline", cfg.labels.today);
-    this._rows.window = this._addRow(footer, "mdi:window-closed-variant", cfg.labels.window);
 
     const warn = document.createElement("div");
     warn.className = "warn";
@@ -133,13 +132,14 @@ class AcRoomCard extends HTMLElement {
     this._stripInnerCard();
   }
 
-  _addRow(parent, icon, label) {
+  _addRow(parent, icon, label, withWindow) {
     const row = document.createElement("div");
     row.className = "row";
     row.innerHTML =
       `<ha-icon icon="${icon}"></ha-icon>` +
       `<span class="label">${label}</span>` +
-      `<span class="value"></span>`;
+      `<span class="value"></span>` +
+      (withWindow ? `<ha-icon class="win"></ha-icon>` : "");
     parent.appendChild(row);
     return row;
   }
@@ -190,11 +190,37 @@ class AcRoomCard extends HTMLElement {
     const cfg = this._config;
     const L = cfg.labels;
 
-    // Potencia
-    const p = this._fmt(cfg.power_entity);
-    this._setRow(this._rows.power, p);
+    /* Fila unica: potencia y, pegado al lado, el simbolo de ventana.
+       Verde = cerrada, rojo = abierta, gris = sin dato. */
+    let windowOpen = false;
+    const win = this._rows.power.querySelector(".win");
+    if (!cfg.window_entity) {
+      win.style.display = "none";
+    } else {
+      win.style.display = "";
+      const st = this._hass.states[cfg.window_entity];
+      if (!st || st.state === "unavailable" || st.state === "unknown") {
+        win.setAttribute("icon", "mdi:window-closed-variant");
+        win.className = "win unknown";
+        win.setAttribute("title", `${L.window}: ${L.unavailable}`);
+      } else {
+        windowOpen = st.state === "on";
+        win.setAttribute("icon", windowOpen ? "mdi:window-open-variant" : "mdi:window-closed-variant");
+        win.className = windowOpen ? "win open" : "win closed";
+        win.setAttribute("title", `${L.window}: ${windowOpen ? L.open : L.closed}`);
+      }
+    }
 
-    // Energia: hoy y/o mes en una sola fila
+    const p = this._fmt(cfg.power_entity);
+    if (!p && !cfg.window_entity) {
+      this._rows.power.style.display = "none";
+    } else {
+      this._rows.power.style.display = "";
+      this._rows.power.querySelector(".label").textContent = p ? L.power : "";
+      this._rows.power.querySelector(".value").textContent = p ? p.text : "";
+    }
+
+    // Energia: hoy y/o mes, en su propia fila (opcional)
     const today = this._fmt(cfg.energy_today_entity);
     const month = this._fmt(cfg.energy_month_entity);
     if (!today && !month) {
@@ -205,33 +231,13 @@ class AcRoomCard extends HTMLElement {
       if (today) parts.push(`${L.today} ${today.text}`);
       if (month) parts.push(`${L.month} ${month.text}`);
       this._rows.energy.querySelector(".label").textContent = "";
-      this._rows.energy.querySelector(".value").textContent = parts.join(" · ");
+      this._rows.energy.querySelector(".value").textContent = parts.join(" \u00b7 ");
     }
 
-    // Ventana
-    let windowOpen = false;
-    if (!cfg.window_entity) {
-      this._rows.window.style.display = "none";
-    } else {
-      this._rows.window.style.display = "";
-      const st = this._hass.states[cfg.window_entity];
-      const v = this._rows.window.querySelector(".value");
-      const ico = this._rows.window.querySelector("ha-icon");
-      if (!st || st.state === "unavailable" || st.state === "unknown") {
-        v.textContent = L.unavailable;
-        this._rows.window.classList.remove("alert");
-      } else {
-        windowOpen = st.state === "on";
-        v.textContent = windowOpen ? L.open : L.closed;
-        ico.setAttribute("icon", windowOpen ? "mdi:window-open-variant" : "mdi:window-closed-variant");
-        this._rows.window.classList.toggle("alert", windowOpen);
-      }
-    }
-
-    // Aviso: ventana abierta con el aire andando
+    // Aviso opcional (por defecto apagado: el icono rojo ya lo dice)
     const main = this._hass.states[cfg.entity];
     const acOn = main && main.state !== "off" && main.state !== "unavailable" && main.state !== "unknown";
-    const show = windowOpen && acOn;
+    const show = !!cfg.show_warning && windowOpen && acOn;
     this._rows.warn.style.display = show ? "flex" : "none";
     if (show) this._rows.warn.querySelector("span").textContent = L.warn;
   }
@@ -260,7 +266,10 @@ class AcRoomCard extends HTMLElement {
       .row ha-icon { --mdc-icon-size: 20px; color: var(--state-icon-color, var(--paper-item-icon-color, #44739e)); flex: 0 0 auto; }
       .row .label { color: var(--secondary-text-color); flex: 0 0 auto; }
       .row .value { margin-left: auto; text-align: right; font-weight: 500; }
-      .row.alert ha-icon, .row.alert .value { color: var(--error-color, #db4437); }
+      .row .win { margin-left: 10px; --mdc-icon-size: 20px; flex: 0 0 auto; }
+      .row .win.closed  { color: var(--success-color, #43a047); }
+      .row .win.open    { color: var(--error-color, #db4437); }
+      .row .win.unknown { color: var(--disabled-text-color, #9e9e9e); }
       .warn {
         display: none; align-items: center; gap: 8px;
         margin: 0 12px 12px 12px; padding: 8px 12px; border-radius: 8px;

@@ -43,9 +43,8 @@ function mk(cfg) {
   // Simulamos lo que arma _build(), sin loadCardHelpers.
   const f = makeEl("div");
   c._rows = {
-    power:  c._addRow(f, "mdi:flash", "Potencia"),
+    power:  c._addRow(f, "mdi:flash", "Potencia", true),
     energy: c._addRow(f, "mdi:x", "Hoy"),
-    window: c._addRow(f, "mdi:window-closed-variant", "Ventana"),
     warn:   makeEl("div"),
   };
   c._update();
@@ -58,28 +57,51 @@ const ok = (name, cond, got) => {
   if (!cond) fail++;
 };
 
-console.log("\n--- caso 1: todas las entidades presentes, ventana abierta, aire encendido");
+console.log("\n--- caso 1: potencia + ventana abierta, todo en una linea");
 let c = mk({ entity: "climate.dorm", power_entity: "sensor.pot",
   energy_today_entity: "sensor.hoy", energy_month_entity: "sensor.mes",
   window_entity: "binary_sensor.ventana" });
+const win = () => c._rows.power.querySelector(".win");
 ok("potencia muestra valor+unidad", c._rows.power.querySelector(".value").textContent === "1234 W", c._rows.power.querySelector(".value").textContent);
-ok("energia combina hoy y mes",     c._rows.energy.querySelector(".value").textContent === "Hoy 0.85 kWh · Mes 12.34 kWh", c._rows.energy.querySelector(".value").textContent);
-ok("ventana dice Abierta",          c._rows.window.querySelector(".value").textContent === "Abierta", c._rows.window.querySelector(".value").textContent);
-ok("ventana marcada en alerta",     c._rows.window.classList.contains("alert"), [...c._rows.window.classList._s]);
-ok("icono cambia a window-open",    c._rows.window.querySelector("ha-icon").getAttribute("icon") === "mdi:window-open-variant", c._rows.window.querySelector("ha-icon").getAttribute("icon"));
-ok("aviso visible",                 c._rows.warn.style.display === "flex", c._rows.warn.style.display);
+ok("energia combina hoy y mes",     c._rows.energy.querySelector(".value").textContent === "Hoy 0.85 kWh \u00b7 Mes 12.34 kWh", c._rows.energy.querySelector(".value").textContent);
+ok("ventana en la MISMA fila que W", win() !== null && c._rows.window === undefined, "hay fila window aparte");
+ok("abierta -> clase open (rojo)",  win().className === "win open", win().className);
+ok("abierta -> icono window-open",  win().getAttribute("icon") === "mdi:window-open-variant", win().getAttribute("icon"));
+ok("tooltip dice Abierta",          win().getAttribute("title") === "Ventana: Abierta", win().getAttribute("title"));
+ok("aviso apagado por defecto",     c._rows.warn.style.display === "none", c._rows.warn.style.display);
+
+console.log("\n--- caso 1b: ventana cerrada -> verde");
+hass.states["binary_sensor.ventana"].state = "off";
+c = mk({ entity: "climate.dorm", power_entity: "sensor.pot", window_entity: "binary_sensor.ventana" });
+ok("cerrada -> clase closed (verde)", c._rows.power.querySelector(".win").className === "win closed", c._rows.power.querySelector(".win").className);
+ok("cerrada -> icono window-closed",  c._rows.power.querySelector(".win").getAttribute("icon") === "mdi:window-closed-variant", c._rows.power.querySelector(".win").getAttribute("icon"));
+hass.states["binary_sensor.ventana"].state = "on";
+
+console.log("\n--- caso 1c: sin ventana -> el icono se oculta");
+c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });
+ok("icono de ventana oculto", c._rows.power.querySelector(".win").style.display === "none", c._rows.power.querySelector(".win").style.display);
+ok("fila de potencia visible", c._rows.power.style.display === "", c._rows.power.style.display);
+
+console.log("\n--- caso 1d: ventana sin potencia -> la fila igual aparece");
+c = mk({ entity: "climate.dorm", window_entity: "binary_sensor.ventana" });
+ok("fila visible solo con ventana", c._rows.power.style.display === "", c._rows.power.style.display);
+ok("label vacio sin potencia",      c._rows.power.querySelector(".label").textContent === "", c._rows.power.querySelector(".label").textContent);
 
 console.log("\n--- caso 2: sin energia ni ventana (ej. Cocina/Oficina)");
 c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });
 ok("fila energia oculta",  c._rows.energy.style.display === "none", c._rows.energy.style.display);
-ok("fila ventana oculta",  c._rows.window.style.display === "none", c._rows.window.style.display);
+ok("icono ventana oculto", c._rows.power.querySelector(".win").style.display === "none", c._rows.power.querySelector(".win").style.display);
 ok("fila potencia visible",c._rows.power.style.display === "", c._rows.power.style.display);
 ok("aviso oculto",         c._rows.warn.style.display === "none", c._rows.warn.style.display);
 
 console.log("\n--- caso 3: aire apagado con ventana abierta -> sin aviso");
 hass.states["climate.dorm"].state = "off";
-c = mk({ entity: "climate.dorm", window_entity: "binary_sensor.ventana" });
+c = mk({ entity: "climate.dorm", window_entity: "binary_sensor.ventana", show_warning: true });
 ok("aviso oculto con AC off", c._rows.warn.style.display === "none", c._rows.warn.style.display);
+hass.states["climate.dorm"].state = "cool";
+c = mk({ entity: "climate.dorm", window_entity: "binary_sensor.ventana", show_warning: true });
+ok("aviso visible con show_warning + AC on", c._rows.warn.style.display === "flex", c._rows.warn.style.display);
+hass.states["climate.dorm"].state = "off";
 hass.states["climate.dorm"].state = "cool";
 
 console.log("\n--- caso 4: sensor caido / inexistente");
