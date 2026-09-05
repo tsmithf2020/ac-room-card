@@ -10,17 +10,15 @@ A Lovelace card that **wraps your existing climate card** and adds the row it is
 always missing: live power draw, window state, room temperature, room fans, and a
 built-in **shutdown timer**.
 
-```
-┌───────────────────────────────────┐
-│ Bedroom                           │  ← your own title
-├───────────────────────────────────┤
-│   (your thermostat card, intact)  │  ← wrapped, not replaced
-├───────────────────────────────────┤
-│ ⚡ 340 W   🪟   🌡 22.6 °C   🌀    │
-├───────────────────────────────────┤
-│ ⏱  −  60 min  +        Schedule   │
-└───────────────────────────────────┘
-```
+<img src="docs/room-card.png" alt="AC Room Card" width="420">
+
+Your climate card, untouched, with a line of live data under it and a shutdown
+timer below that. Here the room is off, the window is closed (green), the room
+sensor reads 17.6 °C and the ceiling fan is idle (blue).
+
+<img src="docs/room-card-fans.png" alt="A room with three fans" width="420">
+
+A room with three fans, all on the same line.
 
 ## Why
 
@@ -424,12 +422,10 @@ entity is missing. Check the entity IDs in the visual editor.
 A compact list — one line per room — for a phone dashboard, where six full cards
 mean six screens of scrolling.
 
-```
-              TARGET  ACTUAL   REAL      ⚡
-⏻  Bedroom      26°    21.6°   22.4°   340 W
-⏻  Kitchen      20°    18.0°   19.1°     5 W
-⏻  Office       26°    23.1°     —       0 W
-```
+<img src="docs/rooms-card.png" alt="AC Rooms Card" width="470">
+
+Six rooms, one line each. Two of them have no `climate` entity — they are IR
+units driven by an `input_boolean`, so they only fill the **Real** column.
 
 ```yaml
 type: custom:ac-rooms-card
