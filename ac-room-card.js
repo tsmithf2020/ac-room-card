@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.10.0";
+const VERSION = "0.10.1";
 
 const T = {
   today: "Hoy",
@@ -21,6 +21,8 @@ const T = {
   offIn: "Apaga en",
   min: "min",
   off: "Apagado",
+  isOn: "encendido",
+  isOff: "apagado",
   unavailable: "no disponible",
 };
 
@@ -169,7 +171,7 @@ class AcRoomCard extends HTMLElement {
     if (fans.length === 1) {
       // Uno solo: va pegado a potencia / ventana / temperatura
       const slot = this._rows.power.querySelector(".fanslot");
-      const b = this._makeFanBtn(fans[0], false);
+      const b = this._makeFanBtn(fans[0]);
       slot.appendChild(b);
       this._fanBtns = [b];
     } else if (fans.length > 1) {
@@ -196,7 +198,7 @@ class AcRoomCard extends HTMLElement {
       const fr = document.createElement("div");
       fr.className = "fanrow";
       for (const f of fans) {
-        const b = this._makeFanBtn(f, true);
+        const b = this._makeFanBtn(f);
         fr.appendChild(b);
         this._fanBtns.push(b);
       }
@@ -407,28 +409,26 @@ class AcRoomCard extends HTMLElement {
     this._hass.callService("homeassistant", "toggle", { entity_id: entityId });
   }
 
-  _makeFanBtn(f, withName) {
+  _makeFanBtn(f) {
     const b = document.createElement("button");
     b.className = "fan";
     b.dataset.entity = f.entity;
-    b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>` +
-                  (withName ? `<span class="fname"></span>` : "");
-    if (withName) {
-      const st = this._hass.states[f.entity];
-      b.querySelector(".fname").textContent =
-        f.name || (st && st.attributes.friendly_name) || f.entity;
-    }
+    const st = this._hass.states[f.entity];
+    b.dataset.label = f.name || (st && st.attributes.friendly_name) || f.entity;
+    b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>`;
     b.addEventListener("click", () => this._toggleFan(f.entity));
     return b;
   }
 
   _updateFans() {
     if (!this._fanBtns) return;
+    const L = this._config.labels;
     for (const b of this._fanBtns) {
-      const on = this._fanIsOn(b.dataset.entity);
+      const st = this._hass.states[b.dataset.entity];
+      const on = !!st && st.state === "on";
       b.className = on ? "fan on" : "fan off";
-      b.title = (this._hass.states[b.dataset.entity] || {}).state === undefined
-        ? this._config.labels.unavailable : (on ? "on" : "off");
+      // Sin nombre visible: el tooltip es lo que distingue un ventilador de otro
+      b.title = `${b.dataset.label}: ${!st ? L.unavailable : on ? L.isOn : L.isOff}`;
     }
   }
 
@@ -625,11 +625,10 @@ class AcRoomCard extends HTMLElement {
       .fan:hover { background: var(--secondary-background-color, #f0f0f0); }
       @keyframes acrc-spin { to { transform: rotate(360deg); } }
       .fanrow {
-        display: flex; flex-wrap: wrap; gap: 6px;
-        padding: 8px 16px 12px 16px;
+        display: flex; flex-wrap: wrap; gap: 8px;
+        padding: 7px 16px 10px 16px;
         border-top: 1px solid var(--divider-color, #e0e0e0);
       }
-      .fanrow .fan { flex: 1; justify-content: center; padding: 6px 8px; }
       .moderow {
         display: flex; gap: 6px; padding: 10px 16px 4px 16px;
       }

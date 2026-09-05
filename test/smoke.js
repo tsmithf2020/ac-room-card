@@ -223,8 +223,7 @@ function mkF(cfg) {
   const f = makeEl("div");
   c._rows = { power: c._addRow(f, "mdi:flash", null, true), energy: c._addRow(f, "mdi:x", "Hoy"), warn: makeEl("div") };
   const fans = c._fanList();
-  if (fans.length === 1) { const b = c._makeFanBtn(fans[0], false); c._fanBtns = [b]; }
-  else if (fans.length > 1) { c._fanBtns = fans.map((x) => c._makeFanBtn(x, true)); }
+  if (fans.length) { c._fanBtns = fans.map((x) => c._makeFanBtn(x)); }
   c._update(); c._tick(false);
   return c;
 }
@@ -237,7 +236,9 @@ ok("click llama homeassistant.toggle", calls[0].d === "homeassistant" && calls[0
 c = mkF({ entity: "climate.dorm", fans: ["fan.uno", "fan.dos"] });
 ok("dos ventiladores: dos botones", c._fanBtns.length === 2, c._fanBtns.length);
 ok("apagado -> clase off (azul)",   c._fanBtns[1].className === "fan off", c._fanBtns[1].className);
-ok("con nombre usa el friendly_name", c._fanBtns[1].querySelector(".fname").textContent === "Vent 2", c._fanBtns[1].querySelector(".fname").textContent);
+ok("los dos botones son del mismo tamano compacto", c._fanBtns.every(b => !/fname/.test(b.innerHTML)), c._fanBtns.map(b=>b.innerHTML));
+ok("el nombre va al tooltip",   c._fanBtns[1].title === "Vent 2: apagado", c._fanBtns[1].title);
+ok("tooltip del encendido",     c._fanBtns[0].title === "Vent 1: encendido", c._fanBtns[0].title);
 
 c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno", name: "Techo", icon: "mdi:ceiling-fan" }] });
 ok("acepta objeto con nombre propio", c._fanList()[0].name === "Techo", c._fanList()[0]);
