@@ -60,6 +60,11 @@ const hass = {
     "sensor.pila_baja":        { state: "12",    attributes: { friendly_name: "Pila Sur" } },
     "sensor.caido":            { state: "unavailable", attributes: {} },
     "sensor.temp":             { state: "22.6000003814697", attributes: { unit_of_measurement: "\u00b0C" } },
+    "sensor.lux":              { state: "420", attributes: { unit_of_measurement: "lx" } },
+    "sensor.lux_noche":        { state: "3",     attributes: { unit_of_measurement: "lx" } },
+    "sensor.lux_tenue":        { state: "45",    attributes: { unit_of_measurement: "lx" } },
+    "sensor.lux_sol":          { state: "18000", attributes: { unit_of_measurement: "lx" } },
+    "sensor.lux_raro":         { state: "no soy numero", attributes: { unit_of_measurement: "lx" } },
     "input_number.mins":       { state: "60", attributes: { min: 0, max: 480, step: 30 } },
     "input_boolean.frio":      { state: "off", attributes: {} },
     "fan.uno":                 { state: "on",  attributes: { friendly_name: "Vent 1" } },
@@ -108,7 +113,7 @@ ok("NO se dibuja la etiqueta Potencia", !/class="label"/.test(c._rows.power.inne
 ok("fila principal marcada .main",  c._rows.power.className === "row main", c._rows.power.className);
 // Guarda contra el bug de 0.15.0: si el markup no trae estos elementos,
 // _update() revienta en la primera linea y el card queda en blanco entero.
-for (const sel of [".picon", ".value", ".win", ".winwrap", ".batdot", ".tempicon", ".temp", ".fanslot", ".fmslot"]) {
+for (const sel of [".picon", ".value", ".win", ".winwrap", ".batdot", ".tempicon", ".temp", ".luxicon", ".lux", ".fanslot", ".fmslot"]) {
   ok("la fila principal contiene " + sel, c._rows.power.querySelector(sel) !== null, c._rows.power.innerHTML);
 }
 
@@ -123,6 +128,33 @@ console.log("\n--- caso 1f: sin temp_entity el termometro se oculta");
 c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });
 ok("termometro oculto", c._rows.power.querySelector(".tempicon").style.display === "none", c._rows.power.querySelector(".tempicon").style.display);
 ok("valor de temp oculto", c._rows.power.querySelector(".temp").style.display === "none", c._rows.power.querySelector(".temp").style.display);
+
+console.log("\n--- caso 1f2: luz de la pieza, a la derecha de la temperatura");
+c = mk({ entity: "climate.dorm", power_entity: "sensor.pot",
+  window_entity: "binary_sensor.ventana", temp_entity: "sensor.temp", lux_entity: "sensor.lux" });
+ok("muestra el valor con unidad", c._rows.power.querySelector(".lux").textContent === "420 lx", c._rows.power.querySelector(".lux").textContent);
+ok("icono de luz visible", c._rows.power.querySelector(".luxicon").style.display === "", c._rows.power.querySelector(".luxicon").style.display);
+ok("la luz va DESPUES de la temperatura",
+   c._rows.power.innerHTML.indexOf("luxicon") > c._rows.power.innerHTML.indexOf("tempicon"), c._rows.power.innerHTML);
+
+console.log("\n--- caso 1f3: el icono acompana al nivel de luz");
+const ico = (e) => mk({ entity: "climate.dorm", lux_entity: e })
+  ._rows.power.querySelector(".luxicon").getAttribute("icon");
+ok("3 lx -> luna",        ico("sensor.lux_noche") === "mdi:weather-night", ico("sensor.lux_noche"));
+ok("45 lx -> tenue",      ico("sensor.lux_tenue") === "mdi:brightness-4", ico("sensor.lux_tenue"));
+ok("420 lx -> intermedio",ico("sensor.lux")       === "mdi:brightness-5", ico("sensor.lux"));
+ok("18000 lx -> sol",     ico("sensor.lux_sol")   === "mdi:white-balance-sunny", ico("sensor.lux_sol"));
+ok("valor no numerico no revienta", ico("sensor.lux_raro") === "mdi:brightness-5", ico("sensor.lux_raro"));
+
+console.log("\n--- caso 1f4: sin lux_entity no se muestra nada");
+c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });
+ok("icono de luz oculto", c._rows.power.querySelector(".luxicon").style.display === "none", c._rows.power.querySelector(".luxicon").style.display);
+ok("valor de luz oculto", c._rows.power.querySelector(".lux").style.display === "none", c._rows.power.querySelector(".lux").style.display);
+
+console.log("\n--- caso 1f5: solo luz, sin potencia ni ventana ni temp");
+c = mk({ entity: "climate.dorm", lux_entity: "sensor.lux" });
+ok("la fila se muestra igual", c._rows.power.style.display === "", c._rows.power.style.display);
+ok("y trae el valor", c._rows.power.querySelector(".lux").textContent === "420 lx", c._rows.power.querySelector(".lux").textContent);
 
 console.log("\n--- caso 1g: solo temperatura, sin potencia ni ventana");
 c = mk({ entity: "climate.dorm", temp_entity: "sensor.temp" });
@@ -619,6 +651,25 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
      cSinReal._filas[0].fila.querySelector(".real").textContent === "",
      cSinReal._filas[0].fila.querySelector(".real").textContent);
   ok("potencia redondeada",       f0.querySelector(".pw").textContent === "1234 W", f0.querySelector(".pw").textContent);
+
+  // Columna de luz: apagada por defecto, porque casi ninguna pieza la tiene y
+  // una columna vacia en todas las filas solo roba ancho en el telefono.
+  ok("la columna de luz NO viene por defecto",
+     f0.querySelector(".lx").style.display === "none", f0.querySelector(".lx").style.display);
+  const cLux = mkR({ columns: ["temps", "power", "lux"], rooms: [
+    { entity: "climate.conFan", name: "Pieza", power_entity: "sensor.pot", lux_entity: "sensor.lux" },
+    { entity: "climate.conFan", name: "Sol",   lux_entity: "sensor.lux_sol" },
+    { entity: "climate.conFan", name: "Sin luz" },
+  ]});
+  const l0 = cLux._filas[0].fila, l1 = cLux._filas[1].fila, l2 = cLux._filas[2].fila;
+  ok("pedida, la columna se muestra", l0.querySelector(".lx").style.display !== "none", l0.querySelector(".lx").style.display);
+  ok("valor redondeado sin unidad",   l0.querySelector(".lx").textContent === "420", l0.querySelector(".lx").textContent);
+  ok("sobre 10k se abrevia",          l1.querySelector(".lx").textContent === "18k", l1.querySelector(".lx").textContent);
+  ok("sin lux_entity queda vacia",    l2.querySelector(".lx").textContent === "", l2.querySelector(".lx").textContent);
+  ok("la luz va DESPUES de la potencia",
+     l0.innerHTML.indexOf('class="lx"') > l0.innerHTML.indexOf('class="pw"'), l0.innerHTML);
+  ok("el encabezado lleva el icono de luz",
+     cLux._cabecera ? /brightness-5/.test(cLux._cabecera.innerHTML) : true, "cabecera");
   ok("ventana naranja si va 1/2", f0.querySelector(".win").className === "win some", f0.querySelector(".win").className);
   ok("climate encendido -> boton on", f0.querySelector(".pwr").className === "pwr on", f0.querySelector(".pwr").className);
   ok("pieza IR con calor on tambien marca on", f1.querySelector(".pwr").className === "pwr on", f1.querySelector(".pwr").className);

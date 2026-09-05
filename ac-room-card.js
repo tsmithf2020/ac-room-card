@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.28.0";
+const VERSION = "0.29.0";
 
 const T = {
   today: "Hoy",
@@ -107,6 +107,18 @@ function moreInfo(el, entityId) {
   }));
 }
 
+// Tramos elegidos por lo que se ve en una pieza, no por fisica: de noche con
+// la luz apagada se está bajo 10 lx, una lampara da decenas, y un dia nublado
+// entrando por la ventana ya pasa de 1000.
+function luxIcon(st) {
+  const v = st ? Number(st.state) : NaN;
+  if (!Number.isFinite(v)) return "mdi:brightness-5";
+  if (v < 10) return "mdi:weather-night";
+  if (v < 100) return "mdi:brightness-4";
+  if (v < 1000) return "mdi:brightness-5";
+  return "mdi:white-balance-sunny";
+}
+
 class AcRoomCard extends HTMLElement {
   constructor() {
     super();
@@ -129,7 +141,8 @@ class AcRoomCard extends HTMLElement {
     // `entity` ya no es obligatoria: sirve una tarjeta sin equipo de clima,
     // por ejemplo un garage con solo sensor de puerta y ventiladores.
     const algo = config && (config.entity || config.base_card || config.power_entity ||
-      config.window_entity || config.temp_entity ||
+      config.lux_entity ||
+      config.window_entity || config.temp_entity || config.lux_entity ||
       (config.fans && config.fans.length) || (config.modes && config.modes.length) ||
       (config.timer && config.timer.entity));
     if (!algo) {
@@ -338,6 +351,8 @@ class AcRoomCard extends HTMLElement {
           `<span class="batdot"></span></span>` +
           `<ha-icon class="tempicon" icon="mdi:thermometer"></ha-icon>` +
           `<span class="temp"></span>` +
+          `<ha-icon class="luxicon" icon="mdi:brightness-5"></ha-icon>` +
+          `<span class="lux"></span>` +
           `<span class="fanslot"></span>` +
           `<span class="fmslot"></span>`
         : "");
@@ -465,8 +480,25 @@ class AcRoomCard extends HTMLElement {
       tVal.textContent = t.text;
     }
 
+    // Luz de la pieza, a la derecha de la temperatura
+    const lIcon = this._rows.power.querySelector(".luxicon");
+    const lVal = this._rows.power.querySelector(".lux");
+    const lx = this._fmt(cfg.lux_entity);
+    if (lIcon && lVal) {
+      if (!lx) {
+        lIcon.style.display = "none";
+        lVal.style.display = "none";
+      } else {
+        lIcon.style.display = "";
+        lVal.style.display = "";
+        lVal.textContent = lx.text;
+        // El icono acompaña al valor: sol lleno con mucha luz, luna de noche.
+        lIcon.setAttribute("icon", luxIcon(lx.state));
+      }
+    }
+
     const p = this._fmt(cfg.power_entity);
-    if (!p && !cfg.window_entity && !cfg.temp_entity) {
+    if (!p && !cfg.window_entity && !cfg.temp_entity && !cfg.lux_entity) {
       this._rows.power.style.display = "none";
     } else {
       this._rows.power.style.display = "";
@@ -514,6 +546,8 @@ class AcRoomCard extends HTMLElement {
     });
     this._bindMoreInfo(this._rows.power.querySelector(".tempicon"), () => cfg.temp_entity);
     this._bindMoreInfo(this._rows.power.querySelector(".temp"), () => cfg.temp_entity);
+    this._bindMoreInfo(this._rows.power.querySelector(".luxicon"), () => cfg.lux_entity);
+    this._bindMoreInfo(this._rows.power.querySelector(".lux"), () => cfg.lux_entity);
 
     this._updateFanMode();
     this._updateFans();
@@ -933,6 +967,7 @@ const EDITOR_LABELS = {
   icon: "Icono del encabezado (opcional)",
   power_entity: "Potencia",
   temp_entity: "Temperatura de la pieza",
+  lux_entity: "Luz de la pieza",
   window_entity: "Sensor de ventana",
   energy_today_entity: "Energia de hoy",
   energy_month_entity: "Energia del mes",
@@ -978,6 +1013,9 @@ const BASE_SCHEMA = [
     { name: "temp_entity", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
   ]},
   { name: "", type: "grid", schema: [
+    { name: "lux_entity", selector: { entity: { domain: "sensor", device_class: "illuminance" } } },
+  ]},
+  { name: "", type: "grid", schema: [
     { name: "mode_cold_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
     { name: "mode_heat_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
   ]},
@@ -1010,7 +1048,7 @@ function toForm(config) {
   const t = c.timer || {};
   const out = {};
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
-                   "energy_today_entity", "energy_month_entity",
+                   "lux_entity", "energy_today_entity", "energy_month_entity",
                    "battery_warn", "fan_mode", "fans_position", "show_warning"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
@@ -1039,7 +1077,7 @@ function fromForm(prev, data) {
   const d = { ...(data || {}) };
 
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
-                   "energy_today_entity", "energy_month_entity",
+                   "lux_entity", "energy_today_entity", "energy_month_entity",
                    "battery_warn", "fan_mode", "fans_position", "show_warning"]) {
     const v = d[k];
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
@@ -1231,6 +1269,8 @@ class AcRoomsCard extends HTMLElement {
      pieza siempre esta a un toque, en el popup. */
   _cols() {
     const c = this._config.columns;
+    // `lux` NO entra por defecto: la mayoria de las piezas no tiene sensor de
+    // luz y una columna vacia en todas las filas solo roba ancho en el telefono.
     return new Set(Array.isArray(c) && c.length ? c : ["temps", "power", "window", "timer", "fans"]);
   }
 
@@ -1442,7 +1482,7 @@ class AcRoomsCard extends HTMLElement {
     /* El encabezado tiene que llevar los MISMOS huecos que las filas y en el
        mismo orden, o las columnas dejan de calzar. */
     const cols0 = this._cols();
-    if (["temps", "power", "timer", "window", "fans"].some((k) => cols0.has(k))) {
+    if (["temps", "power", "lux", "timer", "window", "fans"].some((k) => cols0.has(k))) {
       const L0 = this._config.labels;
       const head = document.createElement("div");
       head.className = "room head";
@@ -1452,6 +1492,7 @@ class AcRoomsCard extends HTMLElement {
           ? `<span class="temps"><span class="tgt"></span>` +
             `<span class="act"></span><span class="real"></span></span>` : "") +
         (cols0.has("power")  ? `<span class="pw"><ha-icon icon="mdi:flash"></ha-icon></span>` : "") +
+        (cols0.has("lux")    ? `<span class="lx"><ha-icon icon="mdi:brightness-5"></ha-icon></span>` : "") +
         (cols0.has("timer")  ? `<span class="tmr"><ha-icon icon="mdi:timer-outline"></ha-icon></span>` : "") +
         (cols0.has("window") ? `<span class="winwrap"><ha-icon icon="mdi:window-closed-variant"></ha-icon></span>` : "") +
         (cols0.has("fans")   ? `<span class="fans"><ha-icon icon="mdi:fan"></ha-icon></span>` : "");
@@ -1481,6 +1522,7 @@ class AcRoomsCard extends HTMLElement {
         `<span class="temps"><span class="tgt"></span>` +
         `<span class="act"></span><span class="real"></span></span>` +
         `<span class="pw"></span>` +
+        `<span class="lx"></span>` +
         `<button class="tmr"><ha-icon></ha-icon><span class="tleft"></span></button>` +
         `<span class="winwrap"><ha-icon class="win"></ha-icon>` +
         `<span class="batdot"></span></span>` +
@@ -1504,7 +1546,7 @@ class AcRoomsCard extends HTMLElement {
       });
       fila.querySelector(".win").addEventListener("click", (ev) => {
         ev.stopPropagation();
-        const lista = normEntries(r.window_entity);
+      const lista = normEntries(r.window_entity);
         const abierta = lista.find((x) => {
           const st = this._hass.states[x.entity];
           return st && st.state === "on";
@@ -1532,6 +1574,7 @@ class AcRoomsCard extends HTMLElement {
       }
       // Columnas apagadas: fuera del flujo, para que no reserven hueco.
       for (const [clave, sel] of [["temps", ".temps"], ["power", ".pw"],
+                                  ["lux", ".lx"],
                                   ["window", ".winwrap"], ["timer", ".tmr"],
                                   ["fans", ".fans"]]) {
         if (!cols.has(clave)) fila.querySelector(sel).style.display = "none";
@@ -1581,6 +1624,17 @@ class AcRoomsCard extends HTMLElement {
       const ps = r.power_entity && this._hass.states[r.power_entity];
       pEl.textContent = ps && !["unavailable", "unknown"].includes(ps.state)
         ? `${Math.round(parseFloat(ps.state) || 0)} W` : "";
+
+      const lEl = fila.querySelector(".lx");
+      if (lEl) {
+        const ls = r.lux_entity && this._hass.states[r.lux_entity];
+        const lv = ls && !["unavailable", "unknown"].includes(ls.state)
+          ? parseFloat(ls.state) : null;
+        // Sobre 10.000 lx el numero deja de caber y no aporta nada: 18k se lee
+        // igual de bien y no descuadra la columna.
+        lEl.textContent = lv === null || Number.isNaN(lv) ? ""
+          : lv >= 10000 ? `${Math.round(lv / 1000)}k` : `${Math.round(lv)}`;
+      }
 
       const lista = normEntries(r.window_entity);
       const wrap = fila.querySelector(".winwrap");
@@ -1676,8 +1730,8 @@ class AcRoomsCard extends HTMLElement {
         font-weight: 500; color: var(--secondary-text-color);
       }
       .head .temps > span { overflow: hidden; text-overflow: clip; }
-      .head .temps > span, .head .pw { color: inherit; font-weight: 500; }
-      .head .pw { display: inline-flex; justify-content: flex-end; align-items: center; }
+      .head .temps > span, .head .pw, .head .lx { color: inherit; font-weight: 500; }
+      .head .pw, .head .lx { display: inline-flex; justify-content: flex-end; align-items: center; }
       .head .tmr, .head .winwrap, .head .fans {
         display: inline-flex; align-items: center; justify-content: flex-start;
         color: inherit; border: none; background: none; padding: 0;
@@ -1686,6 +1740,8 @@ class AcRoomsCard extends HTMLElement {
       .head .pwrsp { flex: 0 0 auto; width: 42px; }
       .head .rname { min-width: 72px; }
       .room.head + .room { border-top: 1px solid var(--divider-color, #e0e0e0); }
+      .lx { flex: 0 0 auto; width: 44px; text-align: right;
+            font-size: 14px; color: var(--secondary-text-color, #727272); }
       .pw { flex: 0 0 auto; cursor: pointer; width: 52px; text-align: right;
             color: var(--secondary-text-color); font-variant-numeric: tabular-nums;
             white-space: nowrap; }
@@ -1738,6 +1794,7 @@ class AcRoomsCard extends HTMLElement {
         .room:not(.head) { padding-top: 6px; padding-bottom: 6px; font-size: 15px; }
         .temps > span { width: 46px; }
         .pw { width: 46px; }
+        .lx { width: 38px; }
         .tmr { width: 54px; }
       }
       @media (max-width: 360px) {
@@ -1745,6 +1802,7 @@ class AcRoomsCard extends HTMLElement {
         .room:not(.head) { padding-top: 6px; padding-bottom: 6px; font-size: 14px; }
         .temps > span { width: 42px; }
         .pw { width: 42px; }
+        .lx { width: 34px; }
         .rname { min-width: 56px; }
       }
     `;
@@ -1809,6 +1867,7 @@ class AcRoomsCardEditor extends HTMLElement {
       { name: "columns", selector: { select: { multiple: true, mode: "list", options: [
         { value: "temps", label: "Temperaturas" },
         { value: "power", label: "Potencia" },
+        { value: "lux", label: "Luz" },
         { value: "window", label: "Ventanas" },
         { value: "timer", label: "Temporizador" },
         { value: "fans", label: "Ventiladores y conmutables" },

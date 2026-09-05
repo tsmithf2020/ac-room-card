@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.28.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.29.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -121,6 +121,7 @@ timer:
 | `icon` | string | no | Icon next to the title. No icon by default. |
 | `power_entity` | string | no | Power sensor (W). |
 | `temp_entity` | string | no | Room temperature sensor. |
+| `lux_entity` | string | no | Room light sensor. The icon follows the level: moon under 10 lx, sun over 1000. |
 | `window_entity` | string \| list | no | One or more window sensors — see [Windows](#windows). |
 | `battery_warn` | number | no | Low-battery threshold in %, default `20`. |
 | `fans` | list | no | Room fans — see [Fans](#fans). |
@@ -465,6 +466,7 @@ rooms:
     name: Bedroom
     power_entity: sensor.bedroom_ac_power
     temp_entity: sensor.bedroom_temperature
+    lux_entity: sensor.bedroom_illuminance
     window_entity: [binary_sensor.bedroom_window]
     fans: [fan.bedroom_ceiling]
     timer:
@@ -515,9 +517,11 @@ is nothing to schedule.
 | Timer | Starts it (or cancels a running one) |
 | Fan icons | Toggles that fan |
 
-`columns` picks what the line shows, from `temps`, `power`, `window`, `timer`
-and `fans`. All five by default. On a phone `[temps, power]` reads best — room
-names stop being truncated, and everything else is one tap away in the popup.
+`columns` picks what the line shows, from `temps`, `power`, `lux`, `window`, `timer`
+and `fans`. All of those except `lux` are on by default: most rooms have no
+light sensor, and an empty column on every row only steals width. On a phone
+`[temps, power]` reads best — room names stop being truncated, and everything
+else is one tap away in the popup.
 
 Columns are fixed-width and the fan column is sized from whichever room has the
 most, so every icon lands in the same place down the list instead of drifting

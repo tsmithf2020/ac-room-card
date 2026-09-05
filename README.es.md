@@ -78,6 +78,7 @@ features:
 | `energy_today_entity` | string | no | Sensor de energia del dia. |
 | `energy_month_entity` | string | no | Sensor de energia del mes. |
 | `window_entity` | string \| lista | no | `binary_sensor` de la ventana. `on` = abierta (rojo), `off` = cerrada (verde). Se dibuja en la misma linea de la potencia. |
+| `lux_entity` | string | no | Sensor de luz de la pieza. El icono sigue al nivel: luna bajo 10 lx, sol sobre 1000. |
 | `temp_entity` | string | no | Sensor de temperatura de la pieza. Se dibuja a la derecha del simbolo de ventana. |
 | `fan_mode` | bool | no | Muestra la velocidad del ventilador **del equipo** (`fan_modes` de la entidad `climate`) como desplegable en la misma linea. |
 | `fan_mode_names` | map | no | Renombra las velocidades, ej. `auto: Automatico`. |
