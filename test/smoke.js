@@ -306,6 +306,14 @@ ok("los dos botones son del mismo tamano compacto", c._fanBtns.every(b => !/fnam
 ok("el nombre va al tooltip",   c._fanBtns[1].title === "Vent 2: apagado", c._fanBtns[1].title);
 ok("tooltip del encendido",     c._fanBtns[0].title === "Vent 1: encendido", c._fanBtns[0].title);
 
+c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno", name: "Sol", color: "orange" }] });
+ok("encendido usa el color propio", c._fanBtns[0].style.color === "orange", c._fanBtns[0].style.color);
+hass.states["fan.uno"].state = "off";
+c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno", name: "Sol", color: "orange" }] });
+ok("apagado NO usa el color propio", c._fanBtns[0].style.color === "", c._fanBtns[0].style.color);
+hass.states["fan.uno"].state = "on";
+c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno" }] });
+ok("sin color sigue el verde comun", c._fanBtns[0].style.color === "" && c._fanBtns[0].className === "fan on", [c._fanBtns[0].style.color, c._fanBtns[0].className]);
 c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno", name: "Techo", icon: "mdi:ceiling-fan" }] });
 ok("acepta objeto con nombre propio", c._fanList()[0].name === "Techo", c._fanList()[0]);
 c = mkF({ entity: "climate.dorm" });

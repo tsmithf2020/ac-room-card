@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.22.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.23.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -175,6 +175,10 @@ fans:
   - entity: switch.bedroom_floor  # or an object, for a custom name and icon
     name: Floor fan
     icon: mdi:fan
+  - entity: input_boolean.summer_mode   # any toggleable entity works
+    name: Summer mode
+    icon: mdi:white-balance-sunny
+    color: var(--warning-color)         # its own colour when on
 ```
 
 They all sit **on the data line**, next to power and temperature — three fit
@@ -183,7 +187,13 @@ two or more their own row below the timer, and `row` always uses a separate
 row. Same compact button either way: just
 the icon, no frame. The name lives in the tooltip.
 
-Tap to toggle. **Green when on** (with the icon spinning), **blue when off**.
+Tap to toggle. **Green when on** (with the icon spinning), **blue when off** —
+or give an entry its own `color` for the on state, any CSS colour or theme
+variable.
+
+The list is not limited to fans: toggling uses `homeassistant.toggle`, so any
+switchable entity fits here — a summer-mode helper, a heater, whatever belongs
+on that line.
 Accepts `fan`, `switch` and `light` entities — some fans end up exposed in the
 `light` domain — because toggling uses `homeassistant.toggle`.
 
@@ -533,7 +543,7 @@ you are aiming at a button.
 node test/smoke.js
 ```
 
-206 assertions, no browser: a minimal DOM shim exercises value formatting,
+209 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.22.1";
+const VERSION = "0.23.0";
 
 const T = {
   today: "Hoy",
@@ -566,6 +566,8 @@ class AcRoomCard extends HTMLElement {
     b.dataset.entity = f.entity;
     const st = this._hass.states[f.entity];
     b.dataset.label = f.name || (st && st.attributes.friendly_name) || f.entity;
+    // color propio para el estado encendido; sin esto se usa el verde comun
+    if (f.color) b.dataset.color = f.color;
     b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>`;
     b.addEventListener("click", () => this._toggleFan(f.entity));
     return b;
@@ -578,6 +580,7 @@ class AcRoomCard extends HTMLElement {
       const st = this._hass.states[b.dataset.entity];
       const on = !!st && st.state === "on";
       b.className = on ? "fan on" : "fan off";
+      b.style.color = on && b.dataset.color ? b.dataset.color : "";
       // Sin nombre visible: el tooltip es lo que distingue un ventilador de otro
       b.title = `${b.dataset.label}: ${!st ? L.unavailable : on ? L.isOn : L.isOff}`;
     }
@@ -1448,7 +1451,9 @@ class AcRoomsCard extends HTMLElement {
         b.dataset.entity = f.entity;
         const st = this._hass.states[f.entity];
         b.dataset.label = f.name || (st && st.attributes.friendly_name) || f.entity;
-        b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>`;
+        // color propio para el estado encendido; sin esto se usa el verde comun
+    if (f.color) b.dataset.color = f.color;
+    b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>`;
         b.addEventListener("click", (ev) => {
           ev.stopPropagation();
           this._hass.callService("homeassistant", "toggle", { entity_id: f.entity });
