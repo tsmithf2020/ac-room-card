@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.24.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.25.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -80,6 +80,20 @@ type: custom:ac-room-card
 entity: climate.bedroom
 ```
 
+Nothing here is required on its own. A room with no air conditioner at all works
+too — leave `entity` out and no card is drawn on top, leaving just the data line
+and whatever else you configure:
+
+```yaml
+type: custom:ac-room-card
+name: Garage
+window_entity: [binary_sensor.garage_door]
+fans: [fan.garage]
+```
+
+Each element on the line appears only when you give it its entity: no power
+sensor, no bolt.
+
 Realistic:
 
 ```yaml
@@ -102,7 +116,7 @@ timer:
 
 | Option | Type | Required | Description |
 |---|---|:--:|---|
-| `entity` | string | **yes** | `climate.*`. Also accepts `input_boolean.*` / `switch.*` for IR units — see [Mode selector](#mode-selector-cool--heat). |
+| `entity` | string | no | `climate.*`. Also accepts `input_boolean.*` / `switch.*` for IR units — see [Mode selector](#mode-selector-cool--heat). **Leave it out and no card is drawn on top** — useful for a room with sensors but no air conditioner. |
 | `name` | string | no | Title drawn above everything. When set it is **not** passed to the wrapped card, so you do not see it twice. |
 | `icon` | string | no | Icon next to the title. No icon by default. |
 | `power_entity` | string | no | Power sensor (W). |
@@ -117,7 +131,7 @@ timer:
 | `energy_month_entity` | string | no | Energy used this month. |
 | `timer` | map | no | Built-in shutdown timer — see [Timer](#timer). |
 | `modes` | list | no | Cool/heat selector for units without a `climate` entity. |
-| `base_card` | map | no | Full config of the card to wrap. Defaults to the built-in `thermostat`. |
+| `base_card` | map \| `false` | no | Full config of the card to wrap. Defaults to the built-in `thermostat`; `false` draws nothing on top. |
 | `base_card_style` | string \| map | no | CSS injected **inside** the wrapped card's shadow DOM. |
 | `show_warning` | bool | no | Text banner when a window is open while the unit runs. Off by default — the red icon already says it. |
 | `features` | list | no | Passed to the built-in `thermostat`. Ignored when `base_card` is set. |
@@ -548,7 +562,7 @@ you are aiming at a button.
 node test/smoke.js
 ```
 
-213 assertions, no browser: a minimal DOM shim exercises value formatting,
+217 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

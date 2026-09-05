@@ -222,7 +222,7 @@ ok("config original no se muta",      c._config.base_card.entity === undefined, 
 
 console.log("\n--- caso 7: setConfig sin entity debe tirar error");
 try { new CARD().setConfig({}); ok("lanza error", false, "no lanzo"); }
-catch (e) { ok("lanza error con mensaje claro", /Falta 'entity'/.test(e.message), e.message); }
+catch (e) { ok("lanza error con mensaje claro", /al menos una entidad/.test(e.message), e.message); }
 
 console.log("\n--- caso 7b: nombre e icono del encabezado");
 c = mk({ entity: "climate.dorm", name: "Dormitorio", icon: "mdi:snowflake", power_entity: "sensor.pot" });
@@ -394,6 +394,30 @@ console.log("\n--- caso 7k: donde van los ventiladores");
   ok("row con uno -> fila propia",   r.enLinea === false, r.enLinea);
   r = build({ entity: "climate.dorm", fans_position: "inline" });
   ok("sin ventiladores no hay linea ni fila", r.enLinea === false, r.enLinea);
+}
+
+console.log("\n--- caso 7l: tarjeta sin equipo de clima (ej. garage)");
+{
+  const sinEquipo = (cfg) => {
+    const c = new CARD(); c.setConfig(cfg); c._hass = hass;
+    const f = makeEl("div");
+    c._rows = { power: c._addRow(f, "mdi:flash", null, true), energy: c._addRow(f, "mdi:x", "Hoy"), warn: makeEl("div") };
+    c._update(); c._tick(false); return c;
+  };
+  // sin entity pero con ventana: valido
+  let c2 = sinEquipo({ window_entity: "binary_sensor.v1" });
+  ok("acepta config sin entity", !!c2._config, "no acepto");
+  ok("sin power_entity el rayo se oculta",
+     c2._rows.power.querySelector(".picon").style.display === "none",
+     c2._rows.power.querySelector(".picon").style.display);
+  // con power_entity el rayo vuelve
+  c2 = sinEquipo({ power_entity: "sensor.pot" });
+  ok("con power_entity el rayo se dibuja",
+     c2._rows.power.querySelector(".picon").style.display === "",
+     c2._rows.power.querySelector(".picon").style.display);
+  // config totalmente vacia: error claro
+  try { new CARD().setConfig({}); ok("config vacia lanza error", false, "no lanzo"); }
+  catch (e) { ok("config vacia lanza error claro", /al menos una entidad/.test(e.message), e.message); }
 }
 
 console.log("\n--- caso 7e: more-info al tocar");

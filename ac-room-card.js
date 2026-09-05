@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.24.0";
+const VERSION = "0.25.0";
 
 const T = {
   today: "Hoy",
@@ -126,8 +126,14 @@ class AcRoomCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !config.entity) {
-      throw new Error("Falta 'entity' (una entidad climate.* o un input_boolean/switch)");
+    // `entity` ya no es obligatoria: sirve una tarjeta sin equipo de clima,
+    // por ejemplo un garage con solo sensor de puerta y ventiladores.
+    const algo = config && (config.entity || config.base_card || config.power_entity ||
+      config.window_entity || config.temp_entity ||
+      (config.fans && config.fans.length) || (config.modes && config.modes.length) ||
+      (config.timer && config.timer.entity));
+    if (!algo) {
+      throw new Error("Configura al menos una entidad (equipo, potencia, ventana, temperatura, ventiladores o temporizador)");
     }
     this._config = {
       labels: {},
@@ -179,7 +185,10 @@ class AcRoomCard extends HTMLElement {
 
     // Con `modes` el propio card dibuja el selector, asi que no hace falta
     // envolver nada salvo que se pida un base_card explicito.
-    const skipInner = !cfg.base_card && Array.isArray(cfg.modes) && cfg.modes.length > 0;
+    // Sin card arriba cuando: se pide explicitamente (base_card: false), hay
+    // selector de modos propio, o no hay equipo que mostrar.
+    const skipInner = cfg.base_card === false ||
+      (!cfg.base_card && ((Array.isArray(cfg.modes) && cfg.modes.length > 0) || !cfg.entity));
 
     // base_card permite envolver CUALQUIER card (custom:mini-climate,
     // custom:simple-thermostat, etc). Sin el, se usa el thermostat integrado
@@ -460,6 +469,9 @@ class AcRoomCard extends HTMLElement {
       this._rows.power.style.display = "none";
     } else {
       this._rows.power.style.display = "";
+      // El rayo es del sensor de potencia: sin sensor, no se dibuja.
+      const pic = this._rows.power.querySelector(".picon");
+      if (pic) pic.style.display = cfg.power_entity ? "" : "none";
       this._rows.power.querySelector(".value").textContent = p ? p.text : "";
     }
 
@@ -482,7 +494,7 @@ class AcRoomCard extends HTMLElement {
     if (Array.isArray(cfg.modes) && cfg.modes.length) {
       acOn = this._activeMode() >= 0;
     } else {
-      const main = this._hass.states[cfg.entity];
+      const main = cfg.entity ? this._hass.states[cfg.entity] : null;
       acOn = !!main && main.state !== "off" && main.state !== "unavailable" && main.state !== "unknown";
     }
     const show = !!cfg.show_warning && windowOpen && acOn;
@@ -908,7 +920,7 @@ class AcRoomCard extends HTMLElement {
 /* ---------- editor visual ---------- */
 
 const EDITOR_LABELS = {
-  entity: "Equipo (climate, o input_boolean si es por IR)",
+  entity: "Equipo (opcional: sin el, no se dibuja tarjeta arriba)",
   name: "Nombre que se muestra arriba",
   window_entity: "Ventanas (verde todas cerradas, naranjo algunas, rojo todas)",
   battery_warn: "Avisar pila baja bajo (%)",
@@ -954,7 +966,7 @@ function buildSchema(config) {
 }
 
 const BASE_SCHEMA = [
-  { name: "entity", required: true,
+  { name: "entity",
     selector: { entity: { domain: ["climate", "input_boolean", "switch"] } } },
   { name: "", type: "grid", schema: [
     { name: "name", selector: { text: {} } },
