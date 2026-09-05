@@ -1,5 +1,8 @@
 # AC Room Card
 
+[![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+![version](https://img.shields.io/badge/version-0.6.0-blue.svg)
+
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
 le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
 consumiendo y, al lado, el **simbolo de la ventana** de la pieza — **verde si
