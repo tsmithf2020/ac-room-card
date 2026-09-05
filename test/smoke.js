@@ -228,6 +228,7 @@ c = mk({ entity: "climate.dorm", name: "Dormitorio", icon: "mdi:snowflake", powe
 ok("guarda el nombre en config", c._config.name === "Dormitorio", c._config.name);
 ok("guarda el icono en config",  c._config.icon === "mdi:snowflake", c._config.icon);
 
+
 console.log("\n--- caso 7c: selector de modo frio/calor");
 const MODES = [{ name: "Frio", entity: "input_boolean.frio", icon: "mdi:snowflake" },
                { name: "Calor", entity: "input_boolean.calor", icon: "mdi:fire" }];
@@ -383,6 +384,19 @@ console.log("\n--- caso 7g: base_card_style se inyecta en el shadow del card env
   c2._injectInnerStyle();
   ok("sin base_card_style no inyecta nada", !root2._injected, root2._injected);
 }
+
+console.log("\n--- caso 7j: el card interno no repite el nombre");
+{
+  let visto = null;
+  global.window.loadCardHelpers = async () => ({
+    createCardElement: async (x) => { visto = x; const e = makeEl("card"); e.shadowRoot = null; return e; },
+  });
+  const probar = async (cfg) => { visto = null; const k = new CARD(); k.setConfig(cfg); k._hass = hass;
+    try { await k._build(); } catch (e) {} return visto; };
+  return probar({ entity: "climate.dorm", name: "Dormitorio" }).then((v1) =>
+    probar({ entity: "climate.dorm" }).then((v2) => {
+      ok("con name, al interno se le manda un espacio", v1 && v1.name === " ", v1);
+      ok("sin name, no se le manda nada",               v2 && v2.name === undefined, v2);
 
 console.log("\n--- caso 8: editor visual, ida y vuelta de la config");
 const ED = DEFS["ac-room-card-editor"];
@@ -623,6 +637,7 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   process.exit(fail ? 1 : 0);
   });
 }
+  })); }
 
 console.log(fail === 0 ? "\n=== TODO PASA ===" : `\n=== ${fail} FALLAS ===`);
 process.exit(fail ? 1 : 0);

@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.19.0";
+const VERSION = "0.19.1";
 
 const T = {
   today: "Hoy",
@@ -190,7 +190,9 @@ class AcRoomCard extends HTMLElement {
         domain === "climate"
           ? { type: "thermostat", entity: cfg.entity }
           : { type: "tile", entity: cfg.entity, features_position: "bottom", vertical: false };
-      // cfg.name pinta el encabezado propio; no se duplica en el card interno
+      // cfg.name pinta el encabezado propio. Al card interno se le manda un
+      // espacio para que no repita el friendly_name debajo del encabezado.
+      if (cfg.name) innerCfg.name = " ";
       if (cfg.features) innerCfg.features = cfg.features;
     }
 
