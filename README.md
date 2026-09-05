@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.22.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.22.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -112,7 +112,7 @@ timer:
 | `window_entity` | string \| list | no | One or more window sensors — see [Windows](#windows). |
 | `battery_warn` | number | no | Low-battery threshold in %, default `20`. |
 | `fans` | list | no | Room fans — see [Fans](#fans). |
-| `fans_position` | string | no | `auto` (default), `inline` or `row`. |
+| `fans_position` | string | no | `inline` (default), `auto` or `row`. |
 | `fan_mode` | bool | no | Show the **unit's own** fan speed (`fan_modes` of the climate entity). |
 | `fan_mode_names` | map | no | Rename those speeds, e.g. `auto: Automatic`. |
 | `energy_today_entity` | string | no | Energy used today. |
@@ -179,10 +179,10 @@ fans:
     icon: mdi:fan
 ```
 
-**One** fan is drawn on the data line, next to power and temperature. **Two or
-more** get their own row below the timer. `fans_position` overrides that:
-`inline` keeps them all on the line however many there are, `row` always gives
-them their own. Same compact button either way: just
+They all sit **on the data line**, next to power and temperature — three fit
+comfortably. `fans_position` changes that: `auto` puts one on the line and gives
+two or more their own row below the timer, and `row` always uses a separate
+row. Same compact button either way: just
 the icon, no frame. The name lives in the tooltip.
 
 Tap to toggle. **Green when on** (with the icon spinning), **blue when off**.
@@ -537,7 +537,7 @@ you are aiming at a button.
 node test/smoke.js
 ```
 
-204 assertions, no browser: a minimal DOM shim exercises value formatting,
+206 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

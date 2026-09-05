@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.22.0";
+const VERSION = "0.22.1";
 
 const T = {
   today: "Hoy",
@@ -252,10 +252,11 @@ class AcRoomCard extends HTMLElement {
 
     if (this._fanModeSupported()) this._buildFanMode();
 
-    /* auto: uno va en la linea, dos o mas en fila propia.
-       inline / row fuerzan una u otra. */
+    /* Por defecto todos van en la linea de datos: caben de sobra y se lee
+       mejor que con una fila aparte. `auto` deja el comportamiento viejo (uno
+       en la linea, dos o mas en fila propia) y `row` fuerza la fila. */
     const fans = this._fanList();
-    const modo = cfg.fans_position || "auto";
+    const modo = cfg.fans_position || "inline";
     const enLinea = fans.length > 0 &&
       (modo === "inline" || (modo === "auto" && fans.length === 1));
     this._fansInline = enLinea;
@@ -961,8 +962,8 @@ const BASE_SCHEMA = [
   { name: "window_entity", selector: { entity: { domain: "binary_sensor", multiple: true } } },
   { name: "fans", selector: { entity: { domain: ["fan", "switch", "light"], multiple: true } } },
   { name: "fans_position", selector: { select: { mode: "dropdown", options: [
-      { value: "auto", label: "Automatico (uno en la linea, varios en fila propia)" },
-      { value: "inline", label: "Siempre en la linea" },
+      { value: "inline", label: "En la linea de datos (por defecto)" },
+      { value: "auto", label: "Uno en la linea, varios en fila propia" },
       { value: "row", label: "Siempre en fila propia" }] } } },
   { name: "", type: "grid", schema: [
     { name: "energy_today_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
