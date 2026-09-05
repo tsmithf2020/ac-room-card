@@ -530,6 +530,40 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
      [c10._filas[0].fila.style.order, c10._filas[1].fila.style.order]);
   hass.states["climate.conFan"].state = "cool";
 
+  console.log("\n  -- temporizadores en la fila --");
+  const c11 = mkR({ rooms: [
+    { entity: "climate.conFan", name: "Corriendo",
+      timer: { entity: "timer.t_run", minutes_entity: "input_number.mins", button_entity: "input_button.b" } },
+    { entity: "climate.conFan", name: "Parada",
+      timer: { entity: "timer.t_idle", minutes_entity: "input_number.mins", button_entity: "input_button.b" } },
+    { entity: "climate.conFan", name: "Sin timer" },
+  ]});
+  const t0 = c11._filas[0].fila.querySelector(".tmr");
+  const t1 = c11._filas[1].fila.querySelector(".tmr");
+  const t2 = c11._filas[2].fila.querySelector(".tmr");
+  ok("corriendo muestra la cuenta", /^\d+:\d\d$/.test(t0.querySelector(".tleft").textContent), t0.querySelector(".tleft").textContent);
+  ok("corriendo se marca .on",      t0.className === "tmr on", t0.className);
+  ok("parada muestra solo el icono", t1.querySelector(".tleft").textContent === "" && t1.style.display === "", [t1.className, t1.style.display]);
+  ok("el tooltip de la parada dice los minutos", /60 min/.test(t1.title), t1.title);
+  ok("sin timer configurado se oculta", t2.style.display === "none", t2.style.display);
+
+  calls.length = 0;
+  t0._ev.click({ stopPropagation() {} });
+  ok("tocar el que corre cancela", calls[0].d === "timer" && calls[0].srv === "cancel", calls[0]);
+  calls.length = 0;
+  t1._ev.click({ stopPropagation() {} });
+  ok("tocar el parado aprieta el input_button", calls[0].d === "input_button" && calls[0].srv === "press", calls[0]);
+
+  hass.states["climate.conFan"].state = "off";
+  const c12 = mkR({ rooms: [{ entity: "climate.conFan", name: "Apagada",
+    timer: { entity: "timer.t_idle", minutes_entity: "input_number.mins" } }] });
+  ok("apagada y sin contar, el timer se esconde",
+     c12._filas[0].fila.querySelector(".tmr").style.display === "none",
+     c12._filas[0].fila.querySelector(".tmr").style.display);
+  c12._tick(false);
+  hass.states["climate.conFan"].state = "cool";
+  c11._tick(false);
+
   try { new ROOMS().setConfig({}); ok("sin rooms lanza error", false, "no lanzo"); }
   catch (e) { ok("sin rooms lanza error claro", /rooms/.test(e.message), e.message); }
 }

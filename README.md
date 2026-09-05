@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.16.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.17.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -438,6 +438,10 @@ rooms:
     temp_entity: sensor.bedroom_temperature
     window_entity: [binary_sensor.bedroom_window]
     fans: [fan.bedroom_ceiling]
+    timer:
+      entity: timer.bedroom_ac
+      minutes_entity: input_number.bedroom_ac_minutes
+      button_entity: input_button.bedroom_ac_timer
   - entity: input_boolean.kids_ac
     name: Kids room
     modes:
@@ -447,7 +451,12 @@ rooms:
 
 Each room takes **the same block as `ac-room-card`**, so you can copy a card's
 config straight in. Fields it uses: `entity`, `name`, `power_entity`,
-`temp_entity`, `window_entity` (with battery), `fans`, `modes`, `battery_warn`.
+`temp_entity`, `window_entity` (with battery), `fans`, `modes`, `timer`,
+`battery_warn`.
+
+A running timer shows its countdown in orange; tap to cancel. Idle, it is just
+an icon you tap to start — and it hides itself when the room is off, since there
+is nothing to schedule.
 
 | Element | Tap |
 |---|---|
@@ -455,13 +464,16 @@ config straight in. Fields it uses: `entity`, `name`, `power_entity`,
 | Name or temperatures | More-info of the unit |
 | Power reading | More-info of the power sensor |
 | Window icon | More-info of the first open window |
+| Timer | Starts it (or cancels a running one) |
 | Fan icons | Toggles that fan |
 
 Temperatures read **current → target**. Windows and batteries use the same
 green/orange/red logic as the full card. Below 380 px the power column hides
 itself to keep the line readable.
 
-`sort: active` puts running rooms on top; leave it out to keep your order.
+`sort: active` puts running rooms on top. **Leave it out to keep your order** —
+otherwise rows jump around as rooms turn on and off, which is disorienting when
+you are aiming at a button.
 
 ## Development
 
@@ -469,7 +481,7 @@ itself to keep the line readable.
 node test/smoke.js
 ```
 
-155 assertions, no browser: a minimal DOM shim exercises value formatting,
+163 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

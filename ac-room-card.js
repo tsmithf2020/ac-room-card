@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.16.1";
+const VERSION = "0.17.0";
 
 const T = {
   today: "Hoy",
@@ -72,6 +72,29 @@ function batteriesLow(hass, lista, umbral) {
     }
   }
   return bajos;
+}
+
+/* Segundos que le quedan a un timer, o null si esta parado. */
+function remainingSecs(hass, entityId) {
+  const st = entityId && hass.states[entityId];
+  if (!st) return null;
+  if (st.state === "active" && st.attributes.finishes_at) {
+    const s = Math.round(new Date(st.attributes.finishes_at).getTime() / 1000 - Date.now() / 1000);
+    return s > 0 ? s : 0;
+  }
+  if (st.state === "paused" && st.attributes.remaining) {
+    const [h, m, x] = String(st.attributes.remaining).split(":").map(Number);
+    return h * 3600 + m * 60 + (x || 0);
+  }
+  return null;
+}
+
+function hms(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const x = s % 60;
+  const p = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${p(m)}:${p(x)}` : `${m}:${p(x)}`;
 }
 
 function moreInfo(el, entityId) {
@@ -684,25 +707,11 @@ class AcRoomCard extends HTMLElement {
 
   _remainingSecs() {
     const t = this._timerCfg();
-    const st = t && this._hass.states[t.entity];
-    if (!st) return null;
-    if (st.state === "active" && st.attributes.finishes_at) {
-      const s = Math.round(new Date(st.attributes.finishes_at).getTime() / 1000 - Date.now() / 1000);
-      return s > 0 ? s : 0;
-    }
-    if (st.state === "paused" && st.attributes.remaining) {
-      const [h, m, x] = String(st.attributes.remaining).split(":").map(Number);
-      return h * 3600 + m * 60 + (x || 0);
-    }
-    return null;
+    return t ? remainingSecs(this._hass, t.entity) : null;
   }
 
   _hms(s) {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const x = s % 60;
-    const p = (n) => String(n).padStart(2, "0");
-    return h > 0 ? `${h}:${p(m)}:${p(x)}` : `${m}:${p(x)}`;
+    return hms(s);
   }
 
   _updateTimer() {
@@ -1128,6 +1137,9 @@ const RT = {
   open: "Abierta",
   closed: "Cerrada",
   batLow: "pila baja",
+  schedule: "Programar",
+  cancel: "Cancelar",
+  min: "min",
   empty: "Configura al menos una pieza en `rooms`",
 };
 
@@ -1219,6 +1231,33 @@ class AcRoomsCard extends HTMLElement {
     return { actual, objetivo };
   }
 
+  /* Corriendo: cancela. Parado: arranca, apretando el input_button del
+     usuario si lo hay, para que su automatizacion siga mandando. */
+  _toggleTimer(r) {
+    const t = r.timer;
+    if (!t || !t.entity) return;
+    if (remainingSecs(this._hass, t.entity) !== null) {
+      this._hass.callService("timer", "cancel", { entity_id: t.entity });
+      return;
+    }
+    if (t.button_entity) {
+      this._hass.callService("input_button", "press", { entity_id: t.button_entity });
+    } else {
+      const mins = t.minutes_entity && this._hass.states[t.minutes_entity];
+      const secs = Math.round((mins ? Number(mins.state) : 0) * 60);
+      if (secs > 0) this._hass.callService("timer", "start", { entity_id: t.entity, duration: secs });
+    }
+  }
+
+  _tick(on) {
+    if (on && !this._ticker) this._ticker = setInterval(() => this._update(), 1000);
+    else if (!on && this._ticker) { clearInterval(this._ticker); this._ticker = null; }
+  }
+
+  disconnectedCallback() {
+    this._tick(false);
+  }
+
   /* ---------- construccion ---------- */
 
   _render() {
@@ -1250,6 +1289,7 @@ class AcRoomsCard extends HTMLElement {
         `<span class="rname"></span>` +
         `<span class="temps"></span>` +
         `<span class="pw"></span>` +
+        `<button class="tmr"><ha-icon></ha-icon><span class="tleft"></span></button>` +
         `<span class="winwrap"><ha-icon class="win"></ha-icon>` +
         `<span class="batdot"></span></span>` +
         `<span class="fans"></span>`;
@@ -1262,6 +1302,10 @@ class AcRoomsCard extends HTMLElement {
       fila.querySelector(".pw").addEventListener("click", (ev) => {
         ev.stopPropagation();
         moreInfo(this, r.power_entity || r.entity);
+      });
+      fila.querySelector(".tmr").addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this._toggleTimer(r);
       });
       fila.querySelector(".win").addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -1300,6 +1344,7 @@ class AcRoomsCard extends HTMLElement {
 
   _update() {
     const L = this._config.labels;
+    let hayTimer = false;
     const orden = this._config.sort === "active" ? [...this._filas].sort(
       (a, b) => Number(this._encendida(b.r)) - Number(this._encendida(a.r))) : this._filas;
     orden.forEach((f, i) => { f.fila.style.order = String(i); });
@@ -1352,6 +1397,24 @@ class AcRoomsCard extends HTMLElement {
         if (bajos.length) dot.setAttribute("title", `${L.batLow}\n${bajos.join("\n")}`);
       }
 
+      const tmr = fila.querySelector(".tmr");
+      const t = r.timer;
+      const restan = t && t.entity ? remainingSecs(this._hass, t.entity) : null;
+      if (!t || !t.entity || (restan === null && !on)) {
+        // Parado y con la pieza apagada no aporta nada: ocupa espacio y no
+        // se puede arrancar un timer de un equipo que no esta andando.
+        tmr.style.display = "none";
+      } else {
+        tmr.style.display = "";
+        const corriendo = restan !== null;
+        if (corriendo) hayTimer = true;
+        tmr.className = corriendo ? "tmr on" : "tmr";
+        tmr.querySelector("ha-icon").setAttribute("icon", corriendo ? "mdi:timer-sand" : "mdi:timer-outline");
+        tmr.querySelector(".tleft").textContent = corriendo ? hms(restan) : "";
+        const mins = t.minutes_entity && this._hass.states[t.minutes_entity];
+        tmr.title = corriendo ? L.cancel : (mins ? `${Math.round(Number(mins.state))} ${L.min}` : L.schedule);
+      }
+
       for (const b of btns) {
         const fst = this._hass.states[b.dataset.entity];
         const fon = !!fst && fst.state === "on";
@@ -1359,6 +1422,8 @@ class AcRoomsCard extends HTMLElement {
         b.title = `${b.dataset.label}: ${!fst ? L.unavailable : fon ? "on" : "off"}`;
       }
     }
+
+    this._tick(hayTimer);
   }
 
   _style() {
@@ -1403,6 +1468,14 @@ class AcRoomsCard extends HTMLElement {
         width: 8px; height: 8px; border-radius: 50%;
         background: var(--error-color, #db4437);
         box-shadow: 0 0 0 1.5px var(--card-background-color, #fff); }
+      .tmr {
+        display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+        border: none; background: transparent; padding: 0; cursor: pointer;
+        font: inherit; font-size: 14px; font-variant-numeric: tabular-nums;
+        color: var(--secondary-text-color);
+      }
+      .tmr ha-icon { --mdc-icon-size: 22px; color: inherit; }
+      .tmr.on { color: var(--warning-color, #ffa600); font-weight: 500; }
       .fans { display: inline-flex; gap: 10px; flex: 0 0 auto; }
       .rfan { border: none; background: transparent; padding: 0; cursor: pointer;
               display: inline-flex; }
