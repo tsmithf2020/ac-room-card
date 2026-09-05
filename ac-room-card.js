@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.12.0";
+const VERSION = "0.12.1";
 
 const T = {
   today: "Hoy",
@@ -684,20 +684,21 @@ class AcRoomCard extends HTMLElement {
       }
       .fanmode.off { opacity: .55; }
       .row .fanslot { margin-left: 12px; display: inline-flex; }
+      /* Sin marco ni fondo: al lado del rayo y del termometro, que son
+         iconos pelados, un boton encajonado desentona. */
       .fan {
-        display: inline-flex; align-items: center; gap: 5px;
-        font: inherit; font-size: 13px; cursor: pointer;
-        border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
-        background: transparent; padding: 3px 8px;
+        display: inline-flex; align-items: center;
+        font: inherit; cursor: pointer;
+        border: none; background: transparent; padding: 0;
       }
       .fan ha-icon { --mdc-icon-size: 20px; }
-      .fan.on  { color: var(--success-color, #43a047); border-color: currentColor; }
+      .fan.on  { color: var(--success-color, #43a047); }
       .fan.on ha-icon { animation: acrc-spin 2s linear infinite; }
       .fan.off { color: var(--info-color, #039be5); }
-      .fan:hover { background: var(--secondary-background-color, #f0f0f0); }
+      .fan:hover { opacity: .7; }
       @keyframes acrc-spin { to { transform: rotate(360deg); } }
       .fanrow {
-        display: flex; flex-wrap: wrap; gap: 8px;
+        display: flex; flex-wrap: wrap; gap: 14px;
         padding: 7px 16px 10px 16px;
         border-top: 1px solid var(--divider-color, #e0e0e0);
       }
