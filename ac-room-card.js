@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.11.0";
+const VERSION = "0.12.0";
 
 const T = {
   today: "Hoy",
@@ -23,6 +23,7 @@ const T = {
   off: "Apagado",
   isOn: "encendido",
   isOff: "apagado",
+  speed: "Velocidad del ventilador",
   unavailable: "no disponible",
 };
 
@@ -167,6 +168,8 @@ class AcRoomCard extends HTMLElement {
     this._rows.power = this._addRow(footer, "mdi:flash", null, true);
     this._rows.energy = this._addRow(footer, "mdi:lightning-bolt-outline", cfg.labels.today);
 
+    if (this._fanModeSupported()) this._buildFanMode();
+
     const fans = this._fanList();
     if (fans.length === 1) {
       // Uno solo: va pegado a potencia / ventana / temperatura
@@ -231,7 +234,8 @@ class AcRoomCard extends HTMLElement {
         ? `<ha-icon class="win"></ha-icon>` +
           `<ha-icon class="tempicon" icon="mdi:thermometer"></ha-icon>` +
           `<span class="temp"></span>` +
-          `<span class="fanslot"></span>`
+          `<span class="fanslot"></span>` +
+          `<span class="fmslot"></span>`
         : "");
     parent.appendChild(row);
     return row;
@@ -361,6 +365,7 @@ class AcRoomCard extends HTMLElement {
     this._bindMoreInfo(this._rows.power.querySelector(".tempicon"), () => cfg.temp_entity);
     this._bindMoreInfo(this._rows.power.querySelector(".temp"), () => cfg.temp_entity);
 
+    this._updateFanMode();
     this._updateFans();
     this._updateModes();
     this._updateTimer();
@@ -430,6 +435,61 @@ class AcRoomCard extends HTMLElement {
       // Sin nombre visible: el tooltip es lo que distingue un ventilador de otro
       b.title = `${b.dataset.label}: ${!st ? L.unavailable : on ? L.isOn : L.isOff}`;
     }
+  }
+
+  /* ---------- velocidad del ventilador del equipo ---------- */
+
+  _fanModeSupported() {
+    if (!this._config.fan_mode) return false;
+    const st = this._hass.states[this._config.entity];
+    return !!(st && Array.isArray(st.attributes.fan_modes) && st.attributes.fan_modes.length);
+  }
+
+  _buildFanMode() {
+    const slot = this._rows.power.querySelector(".fmslot");
+    const wrap = document.createElement("span");
+    wrap.className = "fanmode";
+    wrap.innerHTML = `<ha-icon icon="mdi:fan"></ha-icon><select></select>`;
+    const sel = wrap.querySelector("select");
+    sel.title = this._config.labels.speed;
+    // change, no click: asi el desplegable nativo muestra las opciones y
+    // recien al elegir una se llama al servicio.
+    sel.addEventListener("change", () => {
+      this._hass.callService("climate", "set_fan_mode", {
+        entity_id: this._config.entity,
+        fan_mode: sel.value,
+      });
+    });
+    slot.appendChild(wrap);
+    this._fanModeEl = wrap;
+  }
+
+  _prettyMode(m) {
+    const custom = this._config.fan_mode_names || {};
+    if (custom[m]) return custom[m];
+    return String(m).charAt(0).toUpperCase() + String(m).slice(1);
+  }
+
+  _updateFanMode() {
+    if (!this._fanModeEl) return;
+    const st = this._hass.states[this._config.entity];
+    const modes = (st && st.attributes.fan_modes) || [];
+    const actual = st && st.attributes.fan_mode;
+    const sel = this._fanModeEl.querySelector("select");
+    const firma = modes.join("|");
+    if (sel._firma !== firma) {
+      sel._firma = firma;
+      sel.innerHTML = "";
+      for (const m of modes) {
+        const o = document.createElement("option");
+        o.value = m;
+        o.textContent = this._prettyMode(m);
+        sel.appendChild(o);
+      }
+    }
+    if (actual !== undefined && sel.value !== actual) sel.value = actual;
+    const apagado = !st || st.state === "off" || st.state === "unavailable";
+    this._fanModeEl.className = apagado ? "fanmode off" : "fanmode";
   }
 
   /* ---------- modos (frio / calor) ---------- */
@@ -611,6 +671,18 @@ class AcRoomCard extends HTMLElement {
       .row .win.closed  { color: var(--success-color, #43a047); }
       .row .win.open    { color: var(--error-color, #db4437); }
       .row .win.unknown { color: var(--disabled-text-color, #9e9e9e); }
+      .fanmode {
+        display: inline-flex; align-items: center; gap: 4px; margin-left: 12px;
+        color: var(--state-icon-color, #44739e);
+      }
+      .fanmode ha-icon { --mdc-icon-size: 20px; }
+      .fanmode select {
+        font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+        color: var(--primary-text-color); background: transparent;
+        border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
+        padding: 2px 4px;
+      }
+      .fanmode.off { opacity: .55; }
       .row .fanslot { margin-left: 12px; display: inline-flex; }
       .fan {
         display: inline-flex; align-items: center; gap: 5px;
@@ -684,6 +756,7 @@ const EDITOR_LABELS = {
   entity: "Equipo (climate, o input_boolean si es por IR)",
   name: "Nombre que se muestra arriba",
   fans: "Ventiladores (uno va en la linea; dos o mas, en su propia fila)",
+  fan_mode: "Mostrar la velocidad del ventilador del equipo",
   mode_cold_entity: "Boolean de FRIO (equipos sin entidad climate)",
   mode_heat_entity: "Boolean de CALOR (opcional)",
   icon: "Icono del encabezado (opcional)",
@@ -748,7 +821,10 @@ const BASE_SCHEMA = [
     { name: "timer_minutes_entity", selector: { entity: { domain: "input_number" } } },
   ]},
   { name: "timer_button_entity", selector: { entity: { domain: "input_button" } } },
-  { name: "show_warning", selector: { boolean: {} } },
+  { name: "", type: "grid", schema: [
+    { name: "fan_mode", selector: { boolean: {} } },
+    { name: "show_warning", selector: { boolean: {} } },
+  ]},
 ];
 
 /* El formulario es plano; la config guarda el timer anidado. Estas dos
@@ -759,7 +835,7 @@ function toForm(config) {
   const out = {};
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
                    "window_entity", "energy_today_entity", "energy_month_entity",
-                   "show_warning"]) {
+                   "fan_mode", "show_warning"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
   const fans = normFans(c.fans);
@@ -786,7 +862,7 @@ function fromForm(prev, data) {
 
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
                    "window_entity", "energy_today_entity", "energy_month_entity",
-                   "show_warning"]) {
+                   "fan_mode", "show_warning"]) {
     const v = d[k];
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;

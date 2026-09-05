@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.11.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.12.0-blue.svg)
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
 le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
@@ -77,6 +77,8 @@ features:
 | `energy_month_entity` | string | no | Sensor de energia del mes. |
 | `window_entity` | string | no | `binary_sensor` de la ventana. `on` = abierta (rojo), `off` = cerrada (verde). Se dibuja en la misma linea de la potencia. |
 | `temp_entity` | string | no | Sensor de temperatura de la pieza. Se dibuja a la derecha del simbolo de ventana. |
+| `fan_mode` | bool | no | Muestra la velocidad del ventilador **del equipo** (`fan_modes` de la entidad `climate`) como desplegable en la misma linea. |
+| `fan_mode_names` | map | no | Renombra las velocidades, ej. `auto: Automatico`. |
 | `fans` | list | no | Ventiladores de la pieza. Ver abajo. |
 | `modes` | list | no | Selector de modo para equipos sin entidad `climate`. Ver abajo. |
 | `timer` | map | no | Temporizador de apagado integrado. Ver abajo. |
@@ -241,6 +243,23 @@ base_card:
 ```
 
 Si `base_card` no trae `entity`, hereda la de arriba.
+
+### Velocidad del ventilador del equipo
+
+```yaml
+fan_mode: true
+fan_mode_names:      # opcional
+  auto: Automatico
+  silent: Silencioso
+```
+
+Dibuja un desplegable con las velocidades que declara la entidad `climate`
+(`silent`, `low`, `medium`, `high`, `full`, `auto`... segun el equipo) y marca la
+que esta puesta. Elegir una llama `climate.set_fan_mode`.
+
+No confundir con `fans`, que son los ventiladores **de la pieza**: este es el
+del propio aire acondicionado. Si el equipo no declara `fan_modes`, el control
+no se dibuja.
 
 ### Ventiladores
 

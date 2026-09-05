@@ -33,6 +33,7 @@ const hass = {
   callService: (d, srv, data) => calls.push({ d, srv, data }),
   states: {
     "climate.dorm":            { state: "cool",  attributes: {} },
+    "climate.conFan":          { state: "cool",  attributes: { fan_modes: ["silent","low","auto"], fan_mode: "auto" } },
     "sensor.pot":              { state: "1234",  attributes: { unit_of_measurement: "W" } },
     "sensor.hoy":              { state: "0.85",  attributes: { unit_of_measurement: "kWh" } },
     "sensor.mes":              { state: "12.34", attributes: { unit_of_measurement: "kWh" } },
@@ -244,6 +245,32 @@ c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno", name: "Techo", ico
 ok("acepta objeto con nombre propio", c._fanList()[0].name === "Techo", c._fanList()[0]);
 c = mkF({ entity: "climate.dorm" });
 ok("sin fans, sin botones", c._fanBtns === undefined, c._fanBtns);
+
+console.log("\n--- caso 7f: velocidad del ventilador del equipo");
+function mkFM(cfg) {
+  const c = new CARD(); c.setConfig(cfg); c._hass = hass;
+  const f = makeEl("div");
+  c._rows = { power: c._addRow(f, "mdi:flash", null, true), energy: c._addRow(f, "mdi:x", "Hoy"), warn: makeEl("div") };
+  if (c._fanModeSupported()) c._buildFanMode();
+  c._update(); c._tick(false);
+  return c;
+}
+c = mkFM({ entity: "climate.conFan", fan_mode: true, power_entity: "sensor.pot" });
+ok("se dibuja el control",        !!c._fanModeEl, c._fanModeEl);
+const sel = c._fanModeEl.querySelector("select");
+ok("carga las 3 velocidades",     sel.children.length === 3, sel.children.length);
+ok("muestra la actual (auto)",    sel.value === "auto", sel.value);
+ok("capitaliza los nombres",      sel.children[0].textContent === "Silent", sel.children[0].textContent);
+calls.length = 0; sel.value = "low"; sel._ev.change();
+ok("elegir llama climate.set_fan_mode", calls[0].d === "climate" && calls[0].srv === "set_fan_mode" && calls[0].data.fan_mode === "low", calls[0]);
+
+c = mkFM({ entity: "climate.conFan", power_entity: "sensor.pot" });
+ok("sin la opcion no se dibuja",  !c._fanModeEl, "se dibujo igual");
+c = mkFM({ entity: "climate.dorm", fan_mode: true, power_entity: "sensor.pot" });
+ok("equipo sin fan_modes no lo dibuja", !c._fanModeEl, "se dibujo igual");
+c = mkFM({ entity: "climate.conFan", fan_mode: true, fan_mode_names: { auto: "Automatico" }, power_entity: "sensor.pot" });
+ok("acepta nombres propios", c._fanModeEl.querySelector("select").children[2].textContent === "Automatico",
+   c._fanModeEl.querySelector("select").children[2].textContent);
 
 console.log("\n--- caso 7e: more-info al tocar");
 c = mkF({ entity: "climate.dorm", power_entity: "sensor.pot", window_entity: "binary_sensor.ventana", temp_entity: "sensor.temp" });
