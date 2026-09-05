@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.16.0";
+const VERSION = "0.16.1";
 
 const T = {
   today: "Hoy",
@@ -1365,23 +1365,23 @@ class AcRoomsCard extends HTMLElement {
     const s = document.createElement("style");
     s.textContent = `
       ha-card { overflow: hidden; }
-      .title { padding: 14px 16px 4px; font-size: 16px; font-weight: 500;
+      .title { padding: 16px 18px 6px; font-size: 18px; font-weight: 500;
                color: var(--primary-text-color); }
-      .rooms { display: flex; flex-direction: column; padding: 4px 0 6px; }
+      .rooms { display: flex; flex-direction: column; padding: 4px 0 8px; }
       .room {
-        display: flex; align-items: center; gap: 8px;
-        padding: 4px 12px; min-height: 40px;
-        font-size: 14px; color: var(--primary-text-color);
+        display: flex; align-items: center; gap: 11px;
+        padding: 7px 16px; min-height: 54px;
+        font-size: 16px; color: var(--primary-text-color);
       }
       .room + .room { border-top: 1px solid var(--divider-color, #e0e0e0); }
       .room.gone { opacity: .4; }
       .pwr {
         flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
-        width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+        width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
         border: none; background: var(--secondary-background-color, #f1f1f1);
         color: var(--secondary-text-color); padding: 0;
       }
-      .pwr ha-icon { --mdc-icon-size: 20px; }
+      .pwr ha-icon { --mdc-icon-size: 24px; }
       .pwr.on { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
       .rname { flex: 1 1 auto; min-width: 0; cursor: pointer;
                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1390,29 +1390,29 @@ class AcRoomsCard extends HTMLElement {
                color: var(--primary-text-color); white-space: nowrap; }
       .temps .arr { margin: 0 3px; color: var(--secondary-text-color); }
       .temps .uom { color: var(--secondary-text-color); margin-left: 1px; }
-      .pw { flex: 0 0 auto; cursor: pointer; min-width: 42px; text-align: right;
+      .pw { flex: 0 0 auto; cursor: pointer; min-width: 52px; text-align: right;
             color: var(--secondary-text-color); font-variant-numeric: tabular-nums;
             white-space: nowrap; }
       .winwrap { position: relative; display: inline-flex; flex: 0 0 auto; }
-      .win { --mdc-icon-size: 20px; cursor: pointer; }
+      .win { --mdc-icon-size: 24px; cursor: pointer; }
       .win.closed  { color: var(--success-color, #43a047); }
       .win.some    { color: var(--warning-color, #ffa600); }
       .win.open    { color: var(--error-color, #db4437); }
       .win.unknown { color: var(--disabled-text-color, #9e9e9e); }
       .batdot { display: none; position: absolute; right: -1px; bottom: -1px;
-        width: 7px; height: 7px; border-radius: 50%;
+        width: 8px; height: 8px; border-radius: 50%;
         background: var(--error-color, #db4437);
         box-shadow: 0 0 0 1.5px var(--card-background-color, #fff); }
-      .fans { display: inline-flex; gap: 8px; flex: 0 0 auto; }
+      .fans { display: inline-flex; gap: 10px; flex: 0 0 auto; }
       .rfan { border: none; background: transparent; padding: 0; cursor: pointer;
               display: inline-flex; }
-      .rfan ha-icon { --mdc-icon-size: 20px; color: inherit; }
+      .rfan ha-icon { --mdc-icon-size: 24px; color: inherit; }
       .rfan.on  { color: var(--success-color, #43a047); }
       .rfan.on ha-icon { animation: acrc-spin 2s linear infinite; }
       .rfan.off { color: var(--info-color, #039be5); }
       @keyframes acrc-spin { to { transform: rotate(360deg); } }
       @media (max-width: 380px) {
-        .room { gap: 6px; padding: 4px 8px; }
+        .room { gap: 8px; padding: 6px 10px; font-size: 15px; }
         .pw { display: none; }
       }
     `;
