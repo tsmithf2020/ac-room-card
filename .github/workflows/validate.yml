@@ -1,0 +1,32 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # HACS revalida a diario porque sus reglas cambian sin que el repo cambie:
+    # asi el fallo aparece aqui y no en el PR a hacs/default.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: plugin
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Dos suites: smoke.js y discover.js llevan su propia cadena de promesas.
+      - run: node test/smoke.js
+      - run: node test/discover.js
