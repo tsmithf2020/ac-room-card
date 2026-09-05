@@ -22,7 +22,8 @@ function makeEl(tag) {
 global.HTMLElement = class { attachShadow() { return (this.shadowRoot = makeEl("root")); } };
 global.document = { createElement: makeEl };
 let CARD = null;
-global.customElements = { get: () => undefined, define: (n, c) => { CARD = c; } };
+const DEFS = {};
+global.customElements = { get: () => undefined, define: (n, c) => { DEFS[n] = c; if (n === "ac-room-card") CARD = c; } };
 global.window = { customCards: [] };
 
 require("../ac-room-card.js");
@@ -191,6 +192,36 @@ ok("config original no se muta",      c._config.base_card.entity === undefined, 
 console.log("\n--- caso 7: setConfig sin entity debe tirar error");
 try { new CARD().setConfig({}); ok("lanza error", false, "no lanzo"); }
 catch (e) { ok("lanza error con mensaje claro", /Falta 'entity'/.test(e.message), e.message); }
+
+console.log("\n--- caso 8: editor visual, ida y vuelta de la config");
+const ED = DEFS["ac-room-card-editor"];
+ok("el editor esta registrado", !!ED, Object.keys(DEFS));
+ok("la card expone getConfigElement", typeof CARD.getConfigElement === "function", typeof CARD.getConfigElement);
+
+const cfgFull = {
+  type: "custom:ac-room-card",
+  entity: "climate.dorm",
+  power_entity: "sensor.pot",
+  window_entity: "binary_sensor.ventana",
+  temp_entity: "sensor.temp",
+  timer: { entity: "timer.t_idle", minutes_entity: "input_number.mins", button_entity: "input_button.b" },
+  base_card: { type: "custom:mini-climate", entity: "climate.dorm" },
+};
+const flat = ED.toForm(cfgFull);
+ok("aplana timer.entity",         flat.timer_entity === "timer.t_idle", flat);
+ok("aplana timer.minutes_entity", flat.timer_minutes_entity === "input_number.mins", flat);
+ok("no expone base_card al form", flat.base_card === undefined, flat);
+
+const back = ED.fromForm(cfgFull, flat);
+ok("reconstruye timer anidado", JSON.stringify(back.timer) === JSON.stringify(cfgFull.timer), back.timer);
+ok("PRESERVA base_card",        JSON.stringify(back.base_card) === JSON.stringify(cfgFull.base_card), back.base_card);
+ok("conserva el type",          back.type === "custom:ac-room-card", back.type);
+
+const cleared = ED.fromForm(cfgFull, { ...flat, window_entity: "", timer_entity: undefined });
+ok("borrar ventana quita la clave", cleared.window_entity === undefined, cleared);
+ok("borrar timer quita el bloque",  cleared.timer === undefined, cleared);
+ok("y aun asi conserva base_card",  !!cleared.base_card, cleared.base_card);
+ok("no toca lo que no maneja",      cleared.power_entity === "sensor.pot", cleared.power_entity);
 
 console.log(fail === 0 ? "\n=== TODO PASA ===" : `\n=== ${fail} FALLAS ===`);
 process.exit(fail ? 1 : 0);

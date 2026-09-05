@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.6.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.7.0-blue.svg)
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
 le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
@@ -35,6 +35,15 @@ frontend.
 3. Recargar el navegador con Ctrl+Shift+R.
 
 ## Uso
+
+Se puede configurar **desde la interfaz**: al agregar el card aparece el editor
+visual con selectores de entidad ya filtrados (potencia y energia por
+`device_class`, temperatura por `device_class`, etc.). El YAML de abajo sigue
+siendo valido y es lo que el editor produce.
+
+> `base_card` no se edita en el formulario, pero **se conserva** al guardar
+> desde la UI. Para cambiarlo, usa el editor YAML del card.
+
 
 ```yaml
 type: custom:ac-room-card

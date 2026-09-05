@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 
 const T = {
   today: "Hoy",
@@ -30,6 +30,10 @@ class AcRoomCard extends HTMLElement {
     this._inner = null;
     this._rows = {};
     this._built = false;
+  }
+
+  static getConfigElement() {
+    return document.createElement("ac-room-card-editor");
   }
 
   static getStubConfig(hass, entities) {
@@ -453,6 +457,128 @@ class AcRoomCard extends HTMLElement {
     `;
     return s;
   }
+}
+
+
+/* ---------- editor visual ---------- */
+
+const EDITOR_LABELS = {
+  entity: "Equipo (climate, o input_boolean si es por IR)",
+  power_entity: "Potencia",
+  temp_entity: "Temperatura de la pieza",
+  window_entity: "Sensor de ventana",
+  energy_today_entity: "Energia de hoy",
+  energy_month_entity: "Energia del mes",
+  timer_entity: "Temporizador",
+  timer_minutes_entity: "Minutos (input_number)",
+  timer_button_entity: "Boton que dispara tu automatizacion",
+  show_warning: "Avisar por texto si la ventana esta abierta con el aire andando",
+};
+
+const EDITOR_SCHEMA = [
+  { name: "entity", required: true,
+    selector: { entity: { domain: ["climate", "input_boolean", "switch"] } } },
+  { name: "", type: "grid", schema: [
+    { name: "power_entity", selector: { entity: { domain: "sensor", device_class: "power" } } },
+    { name: "temp_entity", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
+  ]},
+  { name: "window_entity", selector: { entity: { domain: "binary_sensor" } } },
+  { name: "", type: "grid", schema: [
+    { name: "energy_today_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
+    { name: "energy_month_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
+  ]},
+  { name: "", type: "grid", schema: [
+    { name: "timer_entity", selector: { entity: { domain: "timer" } } },
+    { name: "timer_minutes_entity", selector: { entity: { domain: "input_number" } } },
+  ]},
+  { name: "timer_button_entity", selector: { entity: { domain: "input_button" } } },
+  { name: "show_warning", selector: { boolean: {} } },
+];
+
+/* El formulario es plano; la config guarda el timer anidado. Estas dos
+   funciones traducen entre ambos y son las que cubren los tests. */
+function toForm(config) {
+  const c = config || {};
+  const t = c.timer || {};
+  const out = {};
+  for (const k of ["entity", "power_entity", "temp_entity", "window_entity",
+                   "energy_today_entity", "energy_month_entity", "show_warning"]) {
+    if (c[k] !== undefined) out[k] = c[k];
+  }
+  if (t.entity) out.timer_entity = t.entity;
+  if (t.minutes_entity) out.timer_minutes_entity = t.minutes_entity;
+  if (t.button_entity) out.timer_button_entity = t.button_entity;
+  return out;
+}
+
+function fromForm(prev, data) {
+  // Arranca de la config previa para NO perder base_card, labels ni nada
+  // que el formulario no maneje.
+  const out = { ...(prev || {}) };
+  const d = { ...(data || {}) };
+
+  for (const k of ["entity", "power_entity", "temp_entity", "window_entity",
+                   "energy_today_entity", "energy_month_entity", "show_warning"]) {
+    const v = d[k];
+    if (v === undefined || v === "" || v === null || v === false) delete out[k];
+    else out[k] = v;
+  }
+
+  if (d.timer_entity) {
+    const t = { entity: d.timer_entity };
+    if (d.timer_minutes_entity) t.minutes_entity = d.timer_minutes_entity;
+    if (d.timer_button_entity) t.button_entity = d.timer_button_entity;
+    out.timer = t;
+  } else {
+    delete out.timer;
+  }
+  out.type = (prev && prev.type) || "custom:ac-room-card";
+  return out;
+}
+
+class AcRoomCardEditor extends HTMLElement {
+  static get toForm() { return toForm; }
+  static get fromForm() { return fromForm; }
+
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (schema) => EDITOR_LABELS[schema.name] || schema.name;
+      this._form.addEventListener("value-changed", (ev) => {
+        const cfg = fromForm(this._config, ev.detail.value);
+        this._config = cfg;
+        this.dispatchEvent(new CustomEvent("config-changed", {
+          detail: { config: cfg }, bubbles: true, composed: true,
+        }));
+      });
+      this.appendChild(this._form);
+
+      this._note = document.createElement("div");
+      this._note.style.cssText = "padding:8px 4px 0;font-size:12px;color:var(--secondary-text-color)";
+      this.appendChild(this._note);
+    }
+    this._form.hass = this._hass;
+    this._form.schema = EDITOR_SCHEMA;
+    this._form.data = toForm(this._config);
+    this._note.textContent = this._config.base_card
+      ? `El card de arriba (${this._config.base_card.type}) se conserva; se edita en YAML.`
+      : "Sin base_card se usa el termostato integrado de Home Assistant.";
+  }
+}
+
+if (!customElements.get("ac-room-card-editor")) {
+  customElements.define("ac-room-card-editor", AcRoomCardEditor);
 }
 
 if (!customElements.get("ac-room-card")) {
