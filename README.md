@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.23.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.24.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -179,6 +179,7 @@ fans:
     name: Summer mode
     icon: mdi:white-balance-sunny
     color: var(--warning-color)         # its own colour when on
+    position: start                     # before the power reading
 ```
 
 They all sit **on the data line**, next to power and temperature — three fit
@@ -194,6 +195,10 @@ variable.
 The list is not limited to fans: toggling uses `homeassistant.toggle`, so any
 switchable entity fits here — a summer-mode helper, a heater, whatever belongs
 on that line.
+
+Entries land after the temperature by default. `position: start` puts one
+**before the power reading** instead, which reads better for something that is a
+mode rather than a device.
 Accepts `fan`, `switch` and `light` entities — some fans end up exposed in the
 `light` domain — because toggling uses `homeassistant.toggle`.
 
@@ -543,7 +548,7 @@ you are aiming at a button.
 node test/smoke.js
 ```
 
-209 assertions, no browser: a minimal DOM shim exercises value formatting,
+213 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

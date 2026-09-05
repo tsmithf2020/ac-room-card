@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.23.0";
+const VERSION = "0.24.0";
 
 const T = {
   today: "Hoy",
@@ -261,10 +261,12 @@ class AcRoomCard extends HTMLElement {
       (modo === "inline" || (modo === "auto" && fans.length === 1));
     this._fansInline = enLinea;
     if (enLinea) {
-      const slot = this._rows.power.querySelector(".fanslot");
+      // position: "start" los pone antes de la potencia; el resto va al final
+      const fin = this._rows.power.querySelector(".fanslot");
+      const ini = this._rows.power.querySelector(".preslot");
       this._fanBtns = fans.map((f) => {
         const b = this._makeFanBtn(f);
-        slot.appendChild(b);
+        (f.position === "start" && ini ? ini : fin).appendChild(b);
         return b;
       });
     } else if (fans.length) {
@@ -317,6 +319,7 @@ class AcRoomCard extends HTMLElement {
     row.className = "row";
     if (withWindow) row.className = "row main";
     row.innerHTML =
+      (withWindow ? `<span class="preslot"></span>` : "") +
       `<ha-icon class="picon" icon="${icon}"></ha-icon>` +
       (label === null ? "" : `<span class="label">${label}</span>`) +
       `<span class="value"></span>` +
@@ -827,7 +830,10 @@ class AcRoomCard extends HTMLElement {
         padding: 2px 4px;
       }
       .fanmode.off { opacity: .55; }
+      .row .preslot { display: inline-flex; gap: 10px; margin-right: 10px; }
+      .row .preslot:empty { display: none; }
       .row .fanslot { margin-left: 12px; display: inline-flex; gap: 10px; }
+      .row .fanslot:empty { margin-left: 0; }
       /* Sin marco ni fondo: al lado del rayo y del termometro, que son
          iconos pelados, un boton encajonado desentona. */
       .fan {

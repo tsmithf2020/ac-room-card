@@ -289,7 +289,12 @@ function mkF(cfg) {
   const f = makeEl("div");
   c._rows = { power: c._addRow(f, "mdi:flash", null, true), energy: c._addRow(f, "mdi:x", "Hoy"), warn: makeEl("div") };
   const fans = c._fanList();
-  if (fans.length) { c._fanBtns = fans.map((x) => c._makeFanBtn(x)); }
+  if (fans.length) {
+    const fin = c._rows.power.querySelector(".fanslot");
+    const ini = c._rows.power.querySelector(".preslot");
+    c._fanBtns = fans.map((x) => { const b = c._makeFanBtn(x);
+      (x.position === "start" && ini ? ini : fin).appendChild(b); return b; });
+  }
   c._update(); c._tick(false);
   return c;
 }
@@ -313,6 +318,23 @@ c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno", name: "Sol", color
 ok("apagado NO usa el color propio", c._fanBtns[0].style.color === "", c._fanBtns[0].style.color);
 hass.states["fan.uno"].state = "on";
 c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno" }] });
+// position: start lo pone en el hueco previo a la potencia
+c = mkF({ entity: "climate.dorm", power_entity: "sensor.pot",
+          fans: [{ entity: "fan.uno", position: "start" }, { entity: "fan.dos" }] });
+ok("con position:start va al hueco inicial",
+   c._rows.power.querySelector(".preslot").children.length === 1,
+   c._rows.power.querySelector(".preslot").children.length);
+ok("y el otro al hueco del final",
+   c._rows.power.querySelector(".fanslot").children.length === 1,
+   c._rows.power.querySelector(".fanslot").children.length);
+ok("el hueco inicial va antes del rayo",
+   c._rows.power.innerHTML.indexOf("preslot") < c._rows.power.innerHTML.indexOf("picon"),
+   c._rows.power.innerHTML.slice(0, 80));
+c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno" }] });
+ok("sin position, todos al final",
+   c._rows.power.querySelector(".fanslot").children.length === 1,
+   c._rows.power.querySelector(".fanslot").children.length);
+
 ok("sin color sigue el verde comun", c._fanBtns[0].style.color === "" && c._fanBtns[0].className === "fan on", [c._fanBtns[0].style.color, c._fanBtns[0].className]);
 c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno", name: "Techo", icon: "mdi:ceiling-fan" }] });
 ok("acepta objeto con nombre propio", c._fanList()[0].name === "Techo", c._fanList()[0]);
