@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.20.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.20.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -422,7 +422,7 @@ A compact list — one line per room — for a phone dashboard, where six full c
 mean six screens of scrolling.
 
 ```
-              TARGET  ACTUAL   REAL   POWER
+              TARGET  ACTUAL   REAL      ⚡
 ⏻  Bedroom      26°    21.6°   22.4°   340 W
 ⏻  Kitchen      20°    18.0°   19.1°     5 W
 ⏻  Office       26°    23.1°     —       0 W
@@ -494,8 +494,12 @@ The last two rarely agree — the unit measures inside its own casing, often a
 couple of degrees off from the middle of the room. Showing them side by side is
 the point. Rename them with `labels: {target, actual, real}`.
 
-The labels are drawn **once**, as a column header. Repeating them on every row
-would be noise. Windows and batteries use the same
+The labels are drawn **once**, as a column header — with a bolt over the power
+column. Repeating them on every row would be noise.
+
+On narrow screens the columns tighten instead of dropping the power reading:
+on a phone, what the unit is drawing right now is one of the things you most
+want to see. Windows and batteries use the same
 green/orange/red logic as the full card. Below 380 px the power column hides
 itself to keep the line readable.
 
@@ -509,7 +513,7 @@ you are aiming at a button.
 node test/smoke.js
 ```
 
-184 assertions, no browser: a minimal DOM shim exercises value formatting,
+188 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

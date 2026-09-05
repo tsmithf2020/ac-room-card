@@ -609,6 +609,19 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
      fc.parentNode.style.getPropertyValue("--acrc-fans"));
 
   const cDef = mkR({ rooms: [{ entity: "climate.conFan", name: "P", fans: ["fan.uno"] }] });
+  // el encabezado lleva el rayo sobre la columna de potencia
+  const cHead = mkR({ rooms: [{ entity: "climate.conFan", name: "P", power_entity: "sensor.pot" }] });
+  const head = cHead._filas[0].fila.parentNode.children[0];
+  ok("hay fila de encabezado",   head && head.className === "room head", head && head.className);
+  ok("con las tres etiquetas",   head.querySelector(".tgt").textContent === "Target" &&
+                                 head.querySelector(".act").textContent === "Actual" &&
+                                 head.querySelector(".real").textContent === "Real",
+     [head.querySelector(".tgt").textContent, head.querySelector(".act").textContent, head.querySelector(".real").textContent]);
+  ok("y el rayo sobre la potencia", /mdi:flash/.test(head.innerHTML), head.innerHTML);
+  const cSinPw = mkR({ columns: ["temps"], rooms: [{ entity: "climate.conFan", name: "P" }] });
+  const head2 = cSinPw._filas[0].fila.parentNode.children[0];
+  ok("sin columna de potencia, no hay rayo", !/mdi:flash/.test(head2.innerHTML), head2.innerHTML);
+
   ok("sin `columns` se dibujan todas",
      cDef._filas[0].fila.querySelector(".winwrap").style.display !== "none" &&
      cDef._filas[0].fila.querySelector(".fans").style.display !== "none", "alguna quedo fuera");

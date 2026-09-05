@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.20.0";
+const VERSION = "0.20.1";
 
 const T = {
   today: "Hoy",
@@ -1350,7 +1350,7 @@ class AcRoomsCard extends HTMLElement {
         `<span class="pwrsp"></span><span class="rname"></span>` +
         `<span class="temps"><span class="tgt"></span>` +
         `<span class="act"></span><span class="real"></span></span>` +
-        (cols0.has("power") ? `<span class="pw"></span>` : "");
+        (cols0.has("power") ? `<span class="pw"><ha-icon icon="mdi:flash"></ha-icon></span>` : "");
       head.querySelector(".tgt").textContent = L0.target;
       head.querySelector(".act").textContent = L0.actual;
       head.querySelector(".real").textContent = L0.real;
@@ -1559,6 +1559,8 @@ class AcRoomsCard extends HTMLElement {
         font-weight: 500; color: var(--secondary-text-color);
       }
       .head .temps > span, .head .pw { color: inherit; font-weight: 500; }
+      .head .pw { display: inline-flex; justify-content: flex-end; align-items: center; }
+      .head .pw ha-icon { --mdc-icon-size: 14px; }
       .head .pwrsp { flex: 0 0 auto; width: 42px; }
       .head .rname { min-width: 72px; }
       .room.head + .room { border-top: 1px solid var(--divider-color, #e0e0e0); }
@@ -1602,13 +1604,19 @@ class AcRoomsCard extends HTMLElement {
       }
       .ovbox { width: 100%; max-width: 420px; max-height: 88vh; overflow: auto; }
       @keyframes acrc-in { from { opacity: 0 } to { opacity: 1 } }
-      @media (max-width: 420px) {
-        .pw { display: none; }
-      }
-      @media (max-width: 380px) {
+      /* Antes la potencia se escondia bajo 420px. Se prefiere apretar las
+         columnas: en un telefono el consumo es justo lo que se quiere ver. */
+      @media (max-width: 460px) {
         .room { gap: 7px; padding: 6px 10px; font-size: 15px; }
-        .temps > span { width: 44px; }
+        .temps > span { width: 46px; }
+        .pw { width: 46px; }
         .tmr { width: 54px; }
+      }
+      @media (max-width: 360px) {
+        .room { gap: 5px; padding: 6px 8px; font-size: 14px; }
+        .temps > span { width: 42px; }
+        .pw { width: 42px; }
+        .rname { min-width: 56px; }
       }
     `;
     return s;
