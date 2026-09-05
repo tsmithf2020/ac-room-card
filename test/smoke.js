@@ -472,14 +472,27 @@ console.log("\n--- caso 7g: base_card_style se inyecta en el shadow del card env
 console.log("\n--- caso 7j: el card interno no repite el nombre");
 {
   let visto = null;
+  // Antes _build() iba envuelto en un try/catch VACIO, y por eso se trago el
+  // error de cfg.entity.split con entity sin definir. Ahora se guarda y se
+  // comprueba: _build() no debe lanzar nunca.
+  let ultimoError = null;
   global.window.loadCardHelpers = async () => ({
     createCardElement: async (x) => { visto = x; const e = makeEl("card"); e.shadowRoot = null; return e; },
   });
-  const probar = async (cfg) => { visto = null; const k = new CARD(); k.setConfig(cfg); k._hass = hass;
-    try { await k._build(); } catch (e) {} return visto; };
-  return probar({ entity: "climate.dorm", name: "Dormitorio" }).then((v1) =>
-    probar({ entity: "climate.dorm" }).then((v2) => {
-      ok("con name, al interno se le manda un espacio", v1 && v1.name === " ", v1);
+  const probar = async (cfg) => {
+    visto = null; ultimoError = null;
+    const k = new CARD(); k.setConfig(cfg); k._hass = hass;
+    try { await k._build(); } catch (e) { ultimoError = e; }
+    return { visto, err: ultimoError, k };
+  };
+  return probar({ entity: "climate.dorm", name: "Dormitorio" }).then((a) =>
+    probar({ entity: "climate.dorm" }).then((b) =>
+    probar({ name: "Garage", window_entity: ["binary_sensor.v1"], fans: ["fan.uno"] }).then((c0) => {
+      const v1 = a.visto, v2 = b.visto;
+      ok("_build() CON entity no lanza", a.err === null, a.err && a.err.message);
+      ok("_build() SIN entity no lanza", c0.err === null, c0.err && c0.err.message);
+      ok("sin entity no crea card interno", !c0.visto, c0.visto);
+      ok("y arma igual la fila de datos", !!(c0.k._rows && c0.k._rows.power), Object.keys(c0.k._rows || {}));
       ok("sin name, no se le manda nada",               v2 && v2.name === undefined, v2);
 
 console.log("\n--- caso 8: editor visual, ida y vuelta de la config");
@@ -778,7 +791,7 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   process.exit(fail ? 1 : 0);
   });
 }
-  })); }
+  }))); }
 
 console.log(fail === 0 ? "\n=== TODO PASA ===" : `\n=== ${fail} FALLAS ===`);
 process.exit(fail ? 1 : 0);

@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.25.0";
+const VERSION = "0.25.1";
 
 const T = {
   today: "Hoy",
@@ -156,6 +156,7 @@ class AcRoomCard extends HTMLElement {
     if (!this._config) return 3;
     const extra = this._config.timer && this._config.timer.entity ? 1 : 0;
     if (this._config.base_card) return 4 + extra;
+    if (!this._config.entity) return 2;
     return this._config.entity.startsWith("climate.") ? 6 : 3;
   }
 
@@ -179,7 +180,7 @@ class AcRoomCard extends HTMLElement {
 
   async _build() {
     const cfg = this._config;
-    const domain = cfg.entity.split(".")[0];
+    const domain = cfg.entity ? cfg.entity.split(".")[0] : "";
 
     const helpers = await window.loadCardHelpers();
 
@@ -604,7 +605,7 @@ class AcRoomCard extends HTMLElement {
   /* ---------- velocidad del ventilador del equipo ---------- */
 
   _fanModeSupported() {
-    if (!this._config.fan_mode) return false;
+    if (!this._config.fan_mode || !this._config.entity) return false;
     const st = this._hass.states[this._config.entity];
     return !!(st && Array.isArray(st.attributes.fan_modes) && st.attributes.fan_modes.length);
   }
@@ -635,7 +636,7 @@ class AcRoomCard extends HTMLElement {
   }
 
   _updateFanMode() {
-    if (!this._fanModeEl) return;
+    if (!this._fanModeEl || !this._config.entity) return;
     const st = this._hass.states[this._config.entity];
     const modes = (st && st.attributes.fan_modes) || [];
     const actual = st && st.attributes.fan_mode;
