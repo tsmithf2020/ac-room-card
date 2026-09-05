@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.12.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.13.0-blue.svg)
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
 le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
@@ -84,6 +84,7 @@ features:
 | `timer` | map | no | Temporizador de apagado integrado. Ver abajo. |
 | `show_warning` | bool | no | `false` por defecto. Si lo activas, agrega un aviso de texto cuando la ventana esta abierta *y* el aire andando. El icono rojo ya cubre el caso, por eso viene apagado. |
 | `base_card` | map | no | Config completa del card que va arriba. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
+| `base_card_style` | string | no | CSS que se inyecta **dentro** del shadow root del card envuelto. Es la unica forma de retocar su interior desde afuera. |
 | `features` | list | no | Se pasa tal cual al `thermostat` integrado. Se ignora si usas `base_card`. |
 | `labels` | map | no | Sobrescribe los textos (`today`, `month`, `window`, `open`, `closed`, `warn`, `unavailable`). |
 
@@ -285,6 +286,30 @@ Se prenden y apagan tocandolos. **Verde encendido, azul apagado** (con el icono
 girando mientras esta en marcha). Acepta entidades `fan`, `switch` y tambien
 `light`, porque algunos ventiladores quedan expuestos en ese dominio; el toggle
 usa `homeassistant.toggle`, que funciona con los tres.
+
+### Retocar el card envuelto
+
+Un card de HACS vive en su propio shadow DOM, asi que el CSS de afuera no lo
+alcanza. `base_card_style` inyecta CSS ahi adentro.
+
+Ejemplo: `mini-climate` muestra las dos temperaturas como `20.0 / 17 °C` sin
+decir cual es cual. Sus dos custom elements son `mc-target-temperature` y
+`mc-temperature`, asi que:
+
+```yaml
+base_card_style: |
+  mc-target-temperature, mc-temperature { position: relative; }
+  mc-target-temperature::before { content: "Objetivo"; }
+  mc-temperature::before { content: "Actual"; }
+  mc-target-temperature::before, mc-temperature::before {
+    position: absolute; top: -9px; left: 0;
+    font-size: 9px; line-height: 1; letter-spacing: .04em;
+    text-transform: uppercase; white-space: nowrap;
+    color: var(--secondary-text-color);
+  }
+```
+
+Los selectores son relativos al shadow root del card envuelto, no al tuyo.
 
 ### Selector de modo (frio / calor)
 

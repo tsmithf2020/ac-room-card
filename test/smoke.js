@@ -284,6 +284,27 @@ ok("composed:true (sale del shadow DOM)", fired.composed === true, fired.compose
 fired = null; c._moreInfo(undefined);
 ok("sin entidad no dispara nada", fired === null, fired);
 
+console.log("\n--- caso 7g: base_card_style se inyecta en el shadow del card envuelto");
+{
+  const c = new CARD(); c.setConfig({ entity: "climate.dorm", base_card_style: "mc-temperature{color:red}" });
+  c._hass = hass;
+  const root = makeEl("root"); root._q["style[data-acrc]"] = null;
+  const inner = { shadowRoot: { querySelector: (sel) => (sel === "ha-card" ? makeEl("ha-card") : root._injected || null), appendChild: (x) => { root._injected = x; return x; } } };
+  c._inner = inner;
+  c._stripInnerCard();
+  ok("crea el <style> dentro del shadow", !!root._injected, root._injected);
+  ok("con el CSS pedido", root._injected.textContent === "mc-temperature{color:red}", root._injected.textContent);
+  const antes = root._injected;
+  c._injectInnerStyle();
+  ok("no duplica el <style> al refrescar", root._injected === antes, "se creo otro");
+
+  const c2 = new CARD(); c2.setConfig({ entity: "climate.dorm" }); c2._hass = hass;
+  const root2 = makeEl("root");
+  c2._inner = { shadowRoot: { querySelector: () => null, appendChild: (x) => { root2._injected = x; } } };
+  c2._injectInnerStyle();
+  ok("sin base_card_style no inyecta nada", !root2._injected, root2._injected);
+}
+
 console.log("\n--- caso 8: editor visual, ida y vuelta de la config");
 const ED = DEFS["ac-room-card-editor"];
 ok("el editor esta registrado", !!ED, Object.keys(DEFS));

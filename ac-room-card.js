@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.12.1";
+const VERSION = "0.13.0";
 
 const T = {
   today: "Hoy",
@@ -256,6 +256,22 @@ class AcRoomCard extends HTMLElement {
     target.style.border = "none";
     target.style.background = "none";
     target.style.borderRadius = "0";
+    this._injectInnerStyle();
+  }
+
+  /* base_card_style: CSS que se inyecta DENTRO del shadow root del card
+     envuelto. Sin esto no hay forma de tocar su interior desde afuera. */
+  _injectInnerStyle() {
+    const css = this._config.base_card_style;
+    const root = this._inner && this._inner.shadowRoot;
+    if (!css || !root) return;
+    let el = root.querySelector("style[data-acrc]");
+    if (!el) {
+      el = document.createElement("style");
+      el.setAttribute("data-acrc", "");
+      root.appendChild(el);
+    }
+    if (el.textContent !== css) el.textContent = css;
   }
 
   _renderError(err) {
