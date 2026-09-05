@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.9.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.10.0-blue.svg)
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
 le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
@@ -13,8 +13,12 @@ pieza. Sin etiquetas de texto.
 ⚡  12 W  ⬜  🌡 22,6 °C
 ```
 
-Opcionalmente, una segunda linea con la energia consumida y un **temporizador
-de apagado** integrado, para no tener que armarlo con tres cards apiladas.
+Opcionalmente, una segunda linea con la energia consumida, los **ventiladores**
+de la pieza y un **temporizador de apagado** integrado, para no tener que armarlo
+con tres cards apiladas.
+
+Tocar la potencia, la ventana o la temperatura abre el dialogo de esa entidad,
+con su historial.
 
 No copia codigo de Home Assistant. Instancia el card integrado en tiempo de
 ejecucion via `loadCardHelpers()`, asi que hereda su comportamiento, sus
@@ -73,6 +77,7 @@ features:
 | `energy_month_entity` | string | no | Sensor de energia del mes. |
 | `window_entity` | string | no | `binary_sensor` de la ventana. `on` = abierta (rojo), `off` = cerrada (verde). Se dibuja en la misma linea de la potencia. |
 | `temp_entity` | string | no | Sensor de temperatura de la pieza. Se dibuja a la derecha del simbolo de ventana. |
+| `fans` | list | no | Ventiladores de la pieza. Ver abajo. |
 | `modes` | list | no | Selector de modo para equipos sin entidad `climate`. Ver abajo. |
 | `timer` | map | no | Temporizador de apagado integrado. Ver abajo. |
 | `show_warning` | bool | no | `false` por defecto. Si lo activas, agrega un aviso de texto cuando la ventana esta abierta *y* el aire andando. El icono rojo ya cubre el caso, por eso viene apagado. |
@@ -236,6 +241,25 @@ base_card:
 ```
 
 Si `base_card` no trae `entity`, hereda la de arriba.
+
+### Ventiladores
+
+```yaml
+fans:
+  - fan.ventilador_pieza          # basta el entity_id
+  - entity: fan.ventilador_techo  # o un objeto, para nombre e icono propios
+    name: Techo
+    icon: mdi:ceiling-fan
+```
+
+**Uno solo** se dibuja pegado a la potencia, la ventana y la temperatura, en la
+misma linea. **Dos o mas** se dibujan en su propia fila, debajo del temporizador,
+cada uno con su nombre.
+
+Se prenden y apagan tocandolos. **Verde encendido, azul apagado** (con el icono
+girando mientras esta en marcha). Acepta entidades `fan`, `switch` y tambien
+`light`, porque algunos ventiladores quedan expuestos en ese dominio; el toggle
+usa `homeassistant.toggle`, que funciona con los tres.
 
 ### Selector de modo (frio / calor)
 

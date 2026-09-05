@@ -2,7 +2,7 @@
 function makeEl(tag) {
   const el = {
     tag, className: "", innerHTML: "", textContent: "",
-    style: {}, children: [], _q: {}, _attrs: {},
+    style: {}, children: [], _q: {}, _attrs: {}, dataset: {},
     appendChild(c) { this.children.push(c); return c; },
     setAttribute(k, v) { this._attrs[k] = v; },
     getAttribute(k) { return this._attrs[k]; },
@@ -41,6 +41,8 @@ const hass = {
     "sensor.temp":             { state: "22.6000003814697", attributes: { unit_of_measurement: "\u00b0C" } },
     "input_number.mins":       { state: "60", attributes: { min: 0, max: 480, step: 30 } },
     "input_boolean.frio":      { state: "off", attributes: {} },
+    "fan.uno":                 { state: "on",  attributes: { friendly_name: "Vent 1" } },
+    "fan.dos":                 { state: "off", attributes: { friendly_name: "Vent 2" } },
     "input_boolean.calor":     { state: "on",  attributes: {} },
     "timer.t_idle":            { state: "idle",   attributes: {} },
     "timer.t_run":             { state: "active", attributes: { finishes_at: new Date(Date.now() + 2530 * 1000).toISOString() } },
@@ -215,6 +217,45 @@ ok("Apagado solo apaga, no prende nada", calls.length === 1 && calls[0].srv === 
 c = mk({ entity: "input_boolean.frio", modes: [{ name: "Frio", entity: "input_boolean.frio" }] });
 ok("sin ningun modo on, activo = -1", c._activeMode() === -1, c._activeMode());
 
+console.log("\n--- caso 7d: ventiladores");
+function mkF(cfg) {
+  const c = new CARD(); c.setConfig(cfg); c._hass = hass;
+  const f = makeEl("div");
+  c._rows = { power: c._addRow(f, "mdi:flash", null, true), energy: c._addRow(f, "mdi:x", "Hoy"), warn: makeEl("div") };
+  const fans = c._fanList();
+  if (fans.length === 1) { const b = c._makeFanBtn(fans[0], false); c._fanBtns = [b]; }
+  else if (fans.length > 1) { c._fanBtns = fans.map((x) => c._makeFanBtn(x, true)); }
+  c._update(); c._tick(false);
+  return c;
+}
+c = mkF({ entity: "climate.dorm", power_entity: "sensor.pot", fans: ["fan.uno"] });
+ok("un ventilador: un boton",   c._fanBtns.length === 1, c._fanBtns.length);
+ok("encendido -> clase on (verde)", c._fanBtns[0].className === "fan on", c._fanBtns[0].className);
+calls.length = 0; c._fanBtns[0].click();
+ok("click llama homeassistant.toggle", calls[0].d === "homeassistant" && calls[0].srv === "toggle" && calls[0].data.entity_id === "fan.uno", calls[0]);
+
+c = mkF({ entity: "climate.dorm", fans: ["fan.uno", "fan.dos"] });
+ok("dos ventiladores: dos botones", c._fanBtns.length === 2, c._fanBtns.length);
+ok("apagado -> clase off (azul)",   c._fanBtns[1].className === "fan off", c._fanBtns[1].className);
+ok("con nombre usa el friendly_name", c._fanBtns[1].querySelector(".fname").textContent === "Vent 2", c._fanBtns[1].querySelector(".fname").textContent);
+
+c = mkF({ entity: "climate.dorm", fans: [{ entity: "fan.uno", name: "Techo", icon: "mdi:ceiling-fan" }] });
+ok("acepta objeto con nombre propio", c._fanList()[0].name === "Techo", c._fanList()[0]);
+c = mkF({ entity: "climate.dorm" });
+ok("sin fans, sin botones", c._fanBtns === undefined, c._fanBtns);
+
+console.log("\n--- caso 7e: more-info al tocar");
+c = mkF({ entity: "climate.dorm", power_entity: "sensor.pot", window_entity: "binary_sensor.ventana", temp_entity: "sensor.temp" });
+let fired = null;
+c.dispatchEvent = (ev) => { fired = ev; return true; };
+global.CustomEvent = class { constructor(t, o) { this.type = t; Object.assign(this, o); } };
+c._moreInfo("sensor.pot");
+ok("dispara hass-more-info",      fired && fired.type === "hass-more-info", fired && fired.type);
+ok("con el entityId correcto",    fired.detail.entityId === "sensor.pot", fired.detail);
+ok("composed:true (sale del shadow DOM)", fired.composed === true, fired.composed);
+fired = null; c._moreInfo(undefined);
+ok("sin entidad no dispara nada", fired === null, fired);
+
 console.log("\n--- caso 8: editor visual, ida y vuelta de la config");
 const ED = DEFS["ac-room-card-editor"];
 ok("el editor esta registrado", !!ED, Object.keys(DEFS));
@@ -242,6 +283,16 @@ const back = ED.fromForm(cfgFull, flat);
 ok("reconstruye timer anidado", JSON.stringify(back.timer) === JSON.stringify(cfgFull.timer), back.timer);
 ok("PRESERVA base_card",        JSON.stringify(back.base_card) === JSON.stringify(cfgFull.base_card), back.base_card);
 ok("conserva el type",          back.type === "custom:ac-room-card", back.type);
+
+const cfgFans = { type: "custom:ac-room-card", entity: "climate.dorm",
+  fans: [{ entity: "fan.uno", name: "Techo", icon: "mdi:ceiling-fan" }, "fan.dos"] };
+const flatF = ED.toForm(cfgFans);
+ok("el form recibe solo entity_id", JSON.stringify(flatF.fans) === JSON.stringify(["fan.uno","fan.dos"]), flatF.fans);
+const backF = ED.fromForm(cfgFans, flatF);
+ok("conserva el objeto con nombre", backF.fans[0].name === "Techo", backF.fans);
+ok("y el que era string sigue string", backF.fans[1] === "fan.dos", backF.fans);
+const sinFans = ED.fromForm(cfgFans, { ...flatF, fans: [] });
+ok("lista vacia quita la clave", sinFans.fans === undefined, sinFans.fans);
 
 const cfgModes = { type: "custom:ac-room-card", entity: "input_boolean.frio", modes: MODES };
 const flatM = ED.toForm(cfgModes);

@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.9.0";
+const VERSION = "0.10.0";
 
 const T = {
   today: "Hoy",
@@ -165,6 +165,17 @@ class AcRoomCard extends HTMLElement {
     this._rows.power = this._addRow(footer, "mdi:flash", null, true);
     this._rows.energy = this._addRow(footer, "mdi:lightning-bolt-outline", cfg.labels.today);
 
+    const fans = this._fanList();
+    if (fans.length === 1) {
+      // Uno solo: va pegado a potencia / ventana / temperatura
+      const slot = this._rows.power.querySelector(".fanslot");
+      const b = this._makeFanBtn(fans[0], false);
+      slot.appendChild(b);
+      this._fanBtns = [b];
+    } else if (fans.length > 1) {
+      this._fanBtns = [];  // la fila va despues del temporizador
+    }
+
     if (cfg.timer && cfg.timer.entity) {
       const t = document.createElement("div");
       t.className = "timerrow";
@@ -179,6 +190,18 @@ class AcRoomCard extends HTMLElement {
       t.querySelector(".minus").addEventListener("click", () => this._nudge(-1));
       t.querySelector(".plus").addEventListener("click", () => this._nudge(1));
       t.querySelector(".go").addEventListener("click", () => this._go());
+    }
+
+    if (fans.length > 1) {
+      const fr = document.createElement("div");
+      fr.className = "fanrow";
+      for (const f of fans) {
+        const b = this._makeFanBtn(f, true);
+        fr.appendChild(b);
+        this._fanBtns.push(b);
+      }
+      card.appendChild(fr);
+      this._rows.fans = fr;
     }
 
     const warn = document.createElement("div");
@@ -199,13 +222,14 @@ class AcRoomCard extends HTMLElement {
     row.className = "row";
     if (withWindow) row.className = "row main";
     row.innerHTML =
-      `<ha-icon icon="${icon}"></ha-icon>` +
+      `<ha-icon class="picon" icon="${icon}"></ha-icon>` +
       (label === null ? "" : `<span class="label">${label}</span>`) +
       `<span class="value"></span>` +
       (withWindow
         ? `<ha-icon class="win"></ha-icon>` +
           `<ha-icon class="tempicon" icon="mdi:thermometer"></ha-icon>` +
-          `<span class="temp"></span>`
+          `<span class="temp"></span>` +
+          `<span class="fanslot"></span>`
         : "");
     parent.appendChild(row);
     return row;
@@ -329,8 +353,83 @@ class AcRoomCard extends HTMLElement {
     this._rows.warn.style.display = show ? "flex" : "none";
     if (show) this._rows.warn.querySelector("span").textContent = L.warn;
 
+    this._bindMoreInfo(this._rows.power.querySelector(".picon"), () => cfg.power_entity);
+    this._bindMoreInfo(this._rows.power.querySelector(".value"), () => cfg.power_entity);
+    this._bindMoreInfo(this._rows.power.querySelector(".win"), () => cfg.window_entity);
+    this._bindMoreInfo(this._rows.power.querySelector(".tempicon"), () => cfg.temp_entity);
+    this._bindMoreInfo(this._rows.power.querySelector(".temp"), () => cfg.temp_entity);
+
+    this._updateFans();
     this._updateModes();
     this._updateTimer();
+  }
+
+  /* ---------- interaccion ---------- */
+
+  /* Abre el dialogo estandar de Home Assistant. composed:true es obligatorio:
+     sin eso el evento no sale del shadow DOM del card. */
+  _moreInfo(entityId) {
+    if (!entityId) return;
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId }, bubbles: true, composed: true,
+    }));
+  }
+
+  _bindMoreInfo(el, getEntity) {
+    if (!el || el._bound) return;
+    el._bound = true;
+    el.style.cursor = "pointer";
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this._moreInfo(getEntity());
+    });
+  }
+
+  /* ---------- ventiladores ---------- */
+
+  _fanList() {
+    const f = this._config.fans;
+    if (!f) return [];
+    const arr = Array.isArray(f) ? f : [f];
+    return arr
+      .map((x) => (typeof x === "string" ? { entity: x } : x))
+      .filter((x) => x && x.entity);
+  }
+
+  _fanIsOn(entityId) {
+    const st = this._hass.states[entityId];
+    return !!st && st.state === "on";
+  }
+
+  _toggleFan(entityId) {
+    // homeassistant.toggle sirve para fan, switch y tambien para los
+    // ventiladores que quedaron expuestos como light.
+    this._hass.callService("homeassistant", "toggle", { entity_id: entityId });
+  }
+
+  _makeFanBtn(f, withName) {
+    const b = document.createElement("button");
+    b.className = "fan";
+    b.dataset.entity = f.entity;
+    b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>` +
+                  (withName ? `<span class="fname"></span>` : "");
+    if (withName) {
+      const st = this._hass.states[f.entity];
+      b.querySelector(".fname").textContent =
+        f.name || (st && st.attributes.friendly_name) || f.entity;
+    }
+    b.addEventListener("click", () => this._toggleFan(f.entity));
+    return b;
+  }
+
+  _updateFans() {
+    if (!this._fanBtns) return;
+    for (const b of this._fanBtns) {
+      const on = this._fanIsOn(b.dataset.entity);
+      b.className = on ? "fan on" : "fan off";
+      b.title = (this._hass.states[b.dataset.entity] || {}).state === undefined
+        ? this._config.labels.unavailable : (on ? "on" : "off");
+    }
   }
 
   /* ---------- modos (frio / calor) ---------- */
@@ -512,6 +611,25 @@ class AcRoomCard extends HTMLElement {
       .row .win.closed  { color: var(--success-color, #43a047); }
       .row .win.open    { color: var(--error-color, #db4437); }
       .row .win.unknown { color: var(--disabled-text-color, #9e9e9e); }
+      .row .fanslot { margin-left: 12px; display: inline-flex; }
+      .fan {
+        display: inline-flex; align-items: center; gap: 5px;
+        font: inherit; font-size: 13px; cursor: pointer;
+        border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
+        background: transparent; padding: 3px 8px;
+      }
+      .fan ha-icon { --mdc-icon-size: 20px; }
+      .fan.on  { color: var(--success-color, #43a047); border-color: currentColor; }
+      .fan.on ha-icon { animation: acrc-spin 2s linear infinite; }
+      .fan.off { color: var(--info-color, #039be5); }
+      .fan:hover { background: var(--secondary-background-color, #f0f0f0); }
+      @keyframes acrc-spin { to { transform: rotate(360deg); } }
+      .fanrow {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        padding: 8px 16px 12px 16px;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+      }
+      .fanrow .fan { flex: 1; justify-content: center; padding: 6px 8px; }
       .moderow {
         display: flex; gap: 6px; padding: 10px 16px 4px 16px;
       }
@@ -566,6 +684,7 @@ class AcRoomCard extends HTMLElement {
 const EDITOR_LABELS = {
   entity: "Equipo (climate, o input_boolean si es por IR)",
   name: "Nombre que se muestra arriba",
+  fans: "Ventiladores (uno va en la linea; dos o mas, en su propia fila)",
   mode_cold_entity: "Boolean de FRIO (equipos sin entidad climate)",
   mode_heat_entity: "Boolean de CALOR (opcional)",
   icon: "Icono del encabezado (opcional)",
@@ -596,6 +715,7 @@ const EDITOR_SCHEMA = [
     { name: "mode_heat_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
   ]},
   { name: "window_entity", selector: { entity: { domain: "binary_sensor" } } },
+  { name: "fans", selector: { entity: { domain: ["fan", "switch", "light"], multiple: true } } },
   { name: "", type: "grid", schema: [
     { name: "energy_today_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
     { name: "energy_month_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
@@ -619,6 +739,9 @@ function toForm(config) {
                    "show_warning"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
+  if (Array.isArray(c.fans) && c.fans.length) {
+    out.fans = c.fans.map((f) => (typeof f === "string" ? f : f.entity)).filter(Boolean);
+  }
   const m = Array.isArray(c.modes) ? c.modes : [];
   if (m[0] && m[0].entity) out.mode_cold_entity = m[0].entity;
   if (m[1] && m[1].entity) out.mode_heat_entity = m[1].entity;
@@ -640,6 +763,18 @@ function fromForm(prev, data) {
     const v = d[k];
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;
+  }
+
+  // Ventiladores: el form da una lista de entity_id. Conserva el objeto
+  // completo (name / icon) de los que ya estaban configurados asi.
+  if (Array.isArray(d.fans) && d.fans.length) {
+    const prevFans = Array.isArray((prev || {}).fans) ? prev.fans : [];
+    out.fans = d.fans.map((id) => {
+      const old = prevFans.find((f) => (typeof f === "string" ? f : f.entity) === id);
+      return old && typeof old !== "string" ? old : id;
+    });
+  } else {
+    delete out.fans;
   }
 
   // Reconstruye `modes` conservando nombre e icono si ya existian
