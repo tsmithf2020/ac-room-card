@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.7.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.8.0-blue.svg)
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
 le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
@@ -64,6 +64,8 @@ features:
 
 | Opcion | Tipo | Req. | Descripcion |
 |---|---|:--:|---|
+| `name` | string | no | Nombre que se muestra como encabezado arriba del todo. Si lo pones, **no** se le pasa al card interno, para no verlo dos veces. |
+| `icon` | string | no | Icono al lado del nombre. Sin esto no hay icono. |
 | `entity` | string | si | Entidad `climate.*`. Tambien acepta `input_boolean.*` / `switch.*`: en ese caso dibuja un `tile` en vez del termostato. |
 | `name` | string | no | Nombre mostrado. |
 | `power_entity` | string | no | Sensor de potencia (W). |
@@ -86,11 +88,117 @@ asi que respetan el tema claro/oscuro.
 
 ### Temporizador integrado
 
+> **Esto no funciona solo.** Home Assistant no trae temporizadores de apagado
+> para climas: hay que crear tres ayudantes y una automatizacion. El card los
+> dibuja y los opera, pero no los inventa. Abajo esta todo lo que necesitas.
+
+#### 1. Crear los ayudantes
+
+En `configuration.yaml` (o desde Ajustes -> Dispositivos y servicios ->
+Ayudantes, si prefieres la interfaz). Cambia `dorm` por el nombre de tu pieza:
+
+```yaml
+input_number:
+  apagado_aire_dorm:
+    name: Apagado AC Dorm
+    icon: mdi:hvac
+    min: 0
+    max: 480
+    step: 30
+    unit_of_measurement: min
+    mode: slider
+
+input_button:
+  timer_ac_dorm:
+    name: Timer AC Dorm
+    icon: mdi:home-thermometer
+
+timer:
+  timer_ac_dorm_var:
+    name: Timer AC Dorm Var
+    duration: "00:00:00"
+    restore: false
+```
+
+Se aplican sin reiniciar: Herramientas para desarrolladores -> ACCIONES ->
+`input_number.reload`, `input_button.reload` y `timer.reload`.
+
+#### 2. Crear la automatizacion
+
+Es la que arranca la cuenta y la que efectivamente apaga el equipo:
+
+```yaml
+alias: AC - Auto-off con timer DORM
+mode: restart
+triggers:
+  - trigger: state
+    entity_id: input_button.timer_ac_dorm
+    id: start
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.timer_ac_dorm_var
+    id: finished
+  - trigger: state
+    entity_id: climate.dormitorio
+    to: "off"
+    not_from: [unavailable, unknown]
+    id: manual_off
+conditions: []
+actions:
+  - choose:
+      # Arrancar, solo si el aire esta andando y hay minutos configurados
+      - conditions:
+          - condition: trigger
+            id: start
+          - condition: numeric_state
+            entity_id: input_number.apagado_aire_dorm
+            above: 0
+          - condition: template
+            value_template: "{{ states('climate.dormitorio') != 'off' }}"
+        sequence:
+          - action: timer.start
+            target:
+              entity_id: timer.timer_ac_dorm_var
+            data:
+              duration: "{{ (states('input_number.apagado_aire_dorm') | int) * 60 }}"
+      # Se cumplio el tiempo: apagar
+      - conditions:
+          - condition: trigger
+            id: finished
+        sequence:
+          - action: climate.turn_off
+            target:
+              entity_id: climate.dormitorio
+      # Lo apagaron a mano antes: cancelar la cuenta
+      - conditions:
+          - condition: trigger
+            id: manual_off
+          - condition: state
+            entity_id: timer.timer_ac_dorm_var
+            state: active
+        sequence:
+          - action: timer.cancel
+            target:
+              entity_id: timer.timer_ac_dorm_var
+```
+
+Dos detalles que evitan sorpresas: la condicion `above: 0` impide que con cero
+minutos el `timer.start` termine al instante y apague el equipo apenas aprietas
+el boton; y `not_from: [unavailable, unknown]` evita que una reconexion del
+equipo cancele un temporizador en curso.
+
+Si tu equipo no tiene entidad `climate` y se controla con un `input_boolean`
+(tipico de un IR por escenas), reemplaza `climate.turn_off` por
+`input_boolean.turn_off` y ajusta las condiciones a ese `input_boolean`.
+
+#### 3. Apuntar el card a los tres
+
 ```yaml
 timer:
   entity: timer.timer_ac_dorm_var           # requerido
   minutes_entity: input_number.apagado_aire_dorm
-  button_entity: input_button.timer_ac_dorm # opcional
+  button_entity: input_button.timer_ac_dorm # opcional pero recomendado
 ```
 
 Con el temporizador parado muestra los minutos con botones `-` / `+` (respeta
@@ -98,9 +206,11 @@ Con el temporizador parado muestra los minutos con botones `-` / `+` (respeta
 muestra la cuenta regresiva y el boton pasa a **Cancelar**.
 
 `button_entity` es opcional pero conviene: al apretarlo dispara tu
-`input_button`, asi la automatizacion que ya tengas sigue mandando (por ejemplo
-validando que el aire este encendido antes de arrancar). Sin el, el card llama
-`timer.start` directo con los minutos configurados.
+`input_button`, asi **la automatizacion sigue siendo la que manda** y aplica sus
+validaciones. Sin el, el card llama `timer.start` directo saltandose esas
+comprobaciones — y ojo, en ese caso igual necesitas la automatizacion del paso 2
+para la parte de `timer.finished`, porque el card **no apaga el equipo**: solo
+maneja la cuenta.
 
 La cuenta regresiva se calcula en el navegador desde `finishes_at`, con un
 `setInterval` que solo corre mientras el temporizador esta activo. No necesita

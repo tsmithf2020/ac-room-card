@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 
 const T = {
   today: "Hoy",
@@ -105,7 +105,7 @@ class AcRoomCard extends HTMLElement {
         domain === "climate"
           ? { type: "thermostat", entity: cfg.entity }
           : { type: "tile", entity: cfg.entity, features_position: "bottom", vertical: false };
-      if (cfg.name) innerCfg.name = cfg.name;
+      // cfg.name pinta el encabezado propio; no se duplica en el card interno
       if (cfg.features) innerCfg.features = cfg.features;
     }
 
@@ -114,6 +114,16 @@ class AcRoomCard extends HTMLElement {
 
     const card = document.createElement("ha-card");
     card.className = "root";
+
+    if (cfg.name) {
+      const head = document.createElement("div");
+      head.className = "header";
+      head.innerHTML =
+        (cfg.icon ? `<ha-icon class="hicon" icon="${cfg.icon}"></ha-icon>` : "") +
+        `<span class="title"></span>`;
+      head.querySelector(".title").textContent = cfg.name;
+      card.appendChild(head);
+    }
 
     const innerWrap = document.createElement("div");
     innerWrap.className = "inner";
@@ -410,6 +420,13 @@ class AcRoomCard extends HTMLElement {
     s.textContent = `
       .root { overflow: hidden; }
       .inner { display: block; }
+      .header {
+        display: flex; align-items: center; gap: 8px;
+        padding: 14px 16px 0 16px;
+        font-size: 16px; font-weight: 500;
+        color: var(--primary-text-color);
+      }
+      .header .hicon { --mdc-icon-size: 22px; color: var(--state-icon-color, #44739e); flex: 0 0 auto; }
       .footer { padding: 0 16px 8px 16px; }
       .row {
         display: flex; align-items: center; gap: 10px;
@@ -464,6 +481,8 @@ class AcRoomCard extends HTMLElement {
 
 const EDITOR_LABELS = {
   entity: "Equipo (climate, o input_boolean si es por IR)",
+  name: "Nombre que se muestra arriba",
+  icon: "Icono del encabezado (opcional)",
   power_entity: "Potencia",
   temp_entity: "Temperatura de la pieza",
   window_entity: "Sensor de ventana",
@@ -478,6 +497,10 @@ const EDITOR_LABELS = {
 const EDITOR_SCHEMA = [
   { name: "entity", required: true,
     selector: { entity: { domain: ["climate", "input_boolean", "switch"] } } },
+  { name: "", type: "grid", schema: [
+    { name: "name", selector: { text: {} } },
+    { name: "icon", selector: { icon: {} } },
+  ]},
   { name: "", type: "grid", schema: [
     { name: "power_entity", selector: { entity: { domain: "sensor", device_class: "power" } } },
     { name: "temp_entity", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
@@ -501,8 +524,9 @@ function toForm(config) {
   const c = config || {};
   const t = c.timer || {};
   const out = {};
-  for (const k of ["entity", "power_entity", "temp_entity", "window_entity",
-                   "energy_today_entity", "energy_month_entity", "show_warning"]) {
+  for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
+                   "window_entity", "energy_today_entity", "energy_month_entity",
+                   "show_warning"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
   if (t.entity) out.timer_entity = t.entity;
@@ -517,8 +541,9 @@ function fromForm(prev, data) {
   const out = { ...(prev || {}) };
   const d = { ...(data || {}) };
 
-  for (const k of ["entity", "power_entity", "temp_entity", "window_entity",
-                   "energy_today_entity", "energy_month_entity", "show_warning"]) {
+  for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
+                   "window_entity", "energy_today_entity", "energy_month_entity",
+                   "show_warning"]) {
     const v = d[k];
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;

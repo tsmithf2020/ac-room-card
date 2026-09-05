@@ -193,6 +193,11 @@ console.log("\n--- caso 7: setConfig sin entity debe tirar error");
 try { new CARD().setConfig({}); ok("lanza error", false, "no lanzo"); }
 catch (e) { ok("lanza error con mensaje claro", /Falta 'entity'/.test(e.message), e.message); }
 
+console.log("\n--- caso 7b: nombre e icono del encabezado");
+c = mk({ entity: "climate.dorm", name: "Dormitorio", icon: "mdi:snowflake", power_entity: "sensor.pot" });
+ok("guarda el nombre en config", c._config.name === "Dormitorio", c._config.name);
+ok("guarda el icono en config",  c._config.icon === "mdi:snowflake", c._config.icon);
+
 console.log("\n--- caso 8: editor visual, ida y vuelta de la config");
 const ED = DEFS["ac-room-card-editor"];
 ok("el editor esta registrado", !!ED, Object.keys(DEFS));
@@ -207,7 +212,11 @@ const cfgFull = {
   timer: { entity: "timer.t_idle", minutes_entity: "input_number.mins", button_entity: "input_button.b" },
   base_card: { type: "custom:mini-climate", entity: "climate.dorm" },
 };
+cfgFull.name = "Dormitorio";
+cfgFull.icon = "mdi:snowflake";
 const flat = ED.toForm(cfgFull);
+ok("el form recibe el nombre", flat.name === "Dormitorio", flat.name);
+ok("el form recibe el icono",  flat.icon === "mdi:snowflake", flat.icon);
 ok("aplana timer.entity",         flat.timer_entity === "timer.t_idle", flat);
 ok("aplana timer.minutes_entity", flat.timer_minutes_entity === "input_number.mins", flat);
 ok("no expone base_card al form", flat.base_card === undefined, flat);
@@ -217,7 +226,10 @@ ok("reconstruye timer anidado", JSON.stringify(back.timer) === JSON.stringify(cf
 ok("PRESERVA base_card",        JSON.stringify(back.base_card) === JSON.stringify(cfgFull.base_card), back.base_card);
 ok("conserva el type",          back.type === "custom:ac-room-card", back.type);
 
-const cleared = ED.fromForm(cfgFull, { ...flat, window_entity: "", timer_entity: undefined });
+let roundtrip = ED.fromForm(cfgFull, flat);
+ok("nombre sobrevive el ida y vuelta", roundtrip.name === "Dormitorio", roundtrip.name);
+const cleared = ED.fromForm(cfgFull, { ...flat, window_entity: "", timer_entity: undefined, name: "" });
+ok("borrar el nombre quita la clave", cleared.name === undefined, cleared.name);
 ok("borrar ventana quita la clave", cleared.window_entity === undefined, cleared);
 ok("borrar timer quita el bloque",  cleared.timer === undefined, cleared);
 ok("y aun asi conserva base_card",  !!cleared.base_card, cleared.base_card);
