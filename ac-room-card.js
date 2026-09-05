@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 
 const T = {
   today: "Hoy",
@@ -16,6 +16,10 @@ const T = {
   open: "Abierta",
   closed: "Cerrada",
   warn: "Ventana abierta con el aire andando",
+  schedule: "Programar",
+  cancel: "Cancelar",
+  offIn: "Apaga en",
+  min: "min",
   unavailable: "no disponible",
 };
 
@@ -56,7 +60,8 @@ class AcRoomCard extends HTMLElement {
 
   getCardSize() {
     if (!this._config) return 3;
-    if (this._config.base_card) return 4;
+    const extra = this._config.timer && this._config.timer.entity ? 1 : 0;
+    if (this._config.base_card) return 4 + extra;
     return this._config.entity.startsWith("climate.") ? 6 : 3;
   }
 
@@ -117,6 +122,22 @@ class AcRoomCard extends HTMLElement {
 
     this._rows.power = this._addRow(footer, "mdi:flash", null, true);
     this._rows.energy = this._addRow(footer, "mdi:lightning-bolt-outline", cfg.labels.today);
+
+    if (cfg.timer && cfg.timer.entity) {
+      const t = document.createElement("div");
+      t.className = "timerrow";
+      t.innerHTML =
+        `<ha-icon class="tico" icon="mdi:timer-outline"></ha-icon>` +
+        `<button class="step minus" title="-">\u2212</button>` +
+        `<span class="mins"></span>` +
+        `<button class="step plus" title="+">+</button>` +
+        `<button class="go"></button>`;
+      card.appendChild(t);
+      this._rows.timer = t;
+      t.querySelector(".minus").addEventListener("click", () => this._nudge(-1));
+      t.querySelector(".plus").addEventListener("click", () => this._nudge(1));
+      t.querySelector(".go").addEventListener("click", () => this._go());
+    }
 
     const warn = document.createElement("div");
     warn.className = "warn";
@@ -260,6 +281,115 @@ class AcRoomCard extends HTMLElement {
     const show = !!cfg.show_warning && windowOpen && acOn;
     this._rows.warn.style.display = show ? "flex" : "none";
     if (show) this._rows.warn.querySelector("span").textContent = L.warn;
+
+    this._updateTimer();
+  }
+
+  /* ---------- timer ---------- */
+
+  _timerCfg() {
+    return (this._config && this._config.timer) || null;
+  }
+
+  _minsEntity() {
+    const t = this._timerCfg();
+    return t && t.minutes_entity ? this._hass.states[t.minutes_entity] : null;
+  }
+
+  _nudge(dir) {
+    const t = this._timerCfg();
+    const st = this._minsEntity();
+    if (!t || !st) return;
+    const step = Number(st.attributes.step) || 1;
+    const min = Number(st.attributes.min);
+    const max = Number(st.attributes.max);
+    let v = Number(st.state) + dir * step;
+    if (!Number.isNaN(min)) v = Math.max(min, v);
+    if (!Number.isNaN(max)) v = Math.min(max, v);
+    this._hass.callService("input_number", "set_value", {
+      entity_id: t.minutes_entity,
+      value: v,
+    });
+  }
+
+  _go() {
+    const t = this._timerCfg();
+    if (!t) return;
+    const st = this._hass.states[t.entity];
+    if (st && (st.state === "active" || st.state === "paused")) {
+      this._hass.callService("timer", "cancel", { entity_id: t.entity });
+      return;
+    }
+    if (t.button_entity) {
+      // Deja que corra la automatizacion existente (valida que el aire este andando)
+      this._hass.callService("input_button", "press", { entity_id: t.button_entity });
+    } else {
+      const mins = this._minsEntity();
+      const secs = Math.round((mins ? Number(mins.state) : 0) * 60);
+      if (secs > 0) {
+        this._hass.callService("timer", "start", { entity_id: t.entity, duration: secs });
+      }
+    }
+  }
+
+  _remainingSecs() {
+    const t = this._timerCfg();
+    const st = t && this._hass.states[t.entity];
+    if (!st) return null;
+    if (st.state === "active" && st.attributes.finishes_at) {
+      const s = Math.round(new Date(st.attributes.finishes_at).getTime() / 1000 - Date.now() / 1000);
+      return s > 0 ? s : 0;
+    }
+    if (st.state === "paused" && st.attributes.remaining) {
+      const [h, m, x] = String(st.attributes.remaining).split(":").map(Number);
+      return h * 3600 + m * 60 + (x || 0);
+    }
+    return null;
+  }
+
+  _hms(s) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const x = s % 60;
+    const p = (n) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${p(m)}:${p(x)}` : `${m}:${p(x)}`;
+  }
+
+  _updateTimer() {
+    const row = this._rows.timer;
+    if (!row) return;
+    const L = this._config.labels;
+    const secs = this._remainingSecs();
+    const running = secs !== null;
+
+    row.className = running ? "timerrow running" : "timerrow";
+    row.querySelector(".tico").setAttribute("icon", running ? "mdi:timer-sand" : "mdi:timer-outline");
+    row.querySelector(".minus").style.display = running ? "none" : "";
+    row.querySelector(".plus").style.display = running ? "none" : "";
+    row.querySelector(".go").textContent = running ? L.cancel : L.schedule;
+
+    if (running) {
+      row.querySelector(".mins").textContent = `${L.offIn} ${this._hms(secs)}`;
+    } else {
+      const st = this._minsEntity();
+      row.querySelector(".mins").textContent = st ? `${Math.round(Number(st.state))} ${L.min}` : "";
+    }
+    this._tick(running);
+  }
+
+  /* Cuenta regresiva local: evita depender de un sensor de plantilla que
+     escriba en el recorder cada segundo. */
+  _tick(on) {
+    if (on && !this._ticker) {
+      this._ticker = setInterval(() => this._updateTimer(), 1000);
+    } else if (!on && this._ticker) {
+      clearInterval(this._ticker);
+      this._ticker = null;
+    }
+  }
+
+  disconnectedCallback() {
+    this._tick(false);
   }
 
   _setRow(row, data) {
@@ -294,6 +424,25 @@ class AcRoomCard extends HTMLElement {
       .row .win.closed  { color: var(--success-color, #43a047); }
       .row .win.open    { color: var(--error-color, #db4437); }
       .row .win.unknown { color: var(--disabled-text-color, #9e9e9e); }
+      .timerrow {
+        display: flex; align-items: center; gap: 8px;
+        padding: 8px 16px 12px 16px;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+      }
+      .timerrow ha-icon { --mdc-icon-size: 20px; color: var(--state-icon-color, #44739e); flex: 0 0 auto; }
+      .timerrow.running ha-icon { color: var(--warning-color, #ffa600); }
+      .timerrow .mins { font-size: 14px; font-weight: 500; min-width: 64px; }
+      .timerrow.running .mins { color: var(--warning-color, #ffa600); }
+      .timerrow button {
+        font: inherit; font-size: 13px; cursor: pointer;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        background: transparent; color: var(--primary-text-color);
+        border-radius: 6px; padding: 3px 9px;
+      }
+      .timerrow button:hover { background: var(--secondary-background-color, #f0f0f0); }
+      .timerrow .step { min-width: 28px; }
+      .timerrow .go { margin-left: auto; color: var(--primary-color, #03a9f4); font-weight: 500; }
+      .timerrow.running .go { color: var(--error-color, #db4437); }
       .warn {
         display: none; align-items: center; gap: 8px;
         margin: 0 12px 12px 12px; padding: 8px 12px; border-radius: 8px;

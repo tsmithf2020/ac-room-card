@@ -10,7 +10,8 @@ pieza. Sin etiquetas de texto.
 ⚡  12 W  ⬜  🌡 22,6 °C
 ```
 
-Opcionalmente, una segunda linea con la energia consumida.
+Opcionalmente, una segunda linea con la energia consumida y un **temporizador
+de apagado** integrado, para no tener que armarlo con tres cards apiladas.
 
 No copia codigo de Home Assistant. Instancia el card integrado en tiempo de
 ejecucion via `loadCardHelpers()`, asi que hereda su comportamiento, sus
@@ -58,6 +59,7 @@ features:
 | `energy_month_entity` | string | no | Sensor de energia del mes. |
 | `window_entity` | string | no | `binary_sensor` de la ventana. `on` = abierta (rojo), `off` = cerrada (verde). Se dibuja en la misma linea de la potencia. |
 | `temp_entity` | string | no | Sensor de temperatura de la pieza. Se dibuja a la derecha del simbolo de ventana. |
+| `timer` | map | no | Temporizador de apagado integrado. Ver abajo. |
 | `show_warning` | bool | no | `false` por defecto. Si lo activas, agrega un aviso de texto cuando la ventana esta abierta *y* el aire andando. El icono rojo ya cubre el caso, por eso viene apagado. |
 | `base_card` | map | no | Config completa del card que va arriba. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
 | `features` | list | no | Se pasa tal cual al `thermostat` integrado. Se ignora si usas `base_card`. |
@@ -69,6 +71,28 @@ linea. Sirve igual en una pieza que tiene todo y en una que solo tiene potencia.
 
 Los colores salen de las variables del tema (`--success-color`, `--error-color`),
 asi que respetan el tema claro/oscuro.
+
+### Temporizador integrado
+
+```yaml
+timer:
+  entity: timer.timer_ac_dorm_var           # requerido
+  minutes_entity: input_number.apagado_aire_dorm
+  button_entity: input_button.timer_ac_dorm # opcional
+```
+
+Con el temporizador parado muestra los minutos con botones `-` / `+` (respeta
+`step`, `min` y `max` del `input_number`) y un boton **Programar**. Corriendo,
+muestra la cuenta regresiva y el boton pasa a **Cancelar**.
+
+`button_entity` es opcional pero conviene: al apretarlo dispara tu
+`input_button`, asi la automatizacion que ya tengas sigue mandando (por ejemplo
+validando que el aire este encendido antes de arrancar). Sin el, el card llama
+`timer.start` directo con los minutos configurados.
+
+La cuenta regresiva se calcula en el navegador desde `finishes_at`, con un
+`setInterval` que solo corre mientras el temporizador esta activo. No necesita
+un sensor de plantilla refrescando cada segundo ni escribe nada en el recorder.
 
 ### Envolver otro card como base
 

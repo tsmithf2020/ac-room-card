@@ -7,6 +7,8 @@ function makeEl(tag) {
     setAttribute(k, v) { this._attrs[k] = v; },
     getAttribute(k) { return this._attrs[k]; },
     querySelector(sel) { return this._q[sel] || (this._q[sel] = makeEl("stub")); },
+    addEventListener(ev, fn) { (this._ev = this._ev || {})[ev] = fn; },
+    click() { this._ev && this._ev.click && this._ev.click(); },
     classList: {
       _s: new Set(),
       add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); },
@@ -25,7 +27,9 @@ global.window = { customCards: [] };
 
 require("../ac-room-card.js");
 
+const calls = [];
 const hass = {
+  callService: (d, srv, data) => calls.push({ d, srv, data }),
   states: {
     "climate.dorm":            { state: "cool",  attributes: {} },
     "sensor.pot":              { state: "1234",  attributes: { unit_of_measurement: "W" } },
@@ -34,6 +38,9 @@ const hass = {
     "binary_sensor.ventana":   { state: "on",    attributes: {} },
     "sensor.caido":            { state: "unavailable", attributes: {} },
     "sensor.temp":             { state: "22.6000003814697", attributes: { unit_of_measurement: "\u00b0C" } },
+    "input_number.mins":       { state: "60", attributes: { min: 0, max: 480, step: 30 } },
+    "timer.t_idle":            { state: "idle",   attributes: {} },
+    "timer.t_run":             { state: "active", attributes: { finishes_at: new Date(Date.now() + 2530 * 1000).toISOString() } },
   },
 };
 
@@ -105,6 +112,46 @@ console.log("\n--- caso 1d: ventana sin potencia -> la fila igual aparece");
 c = mk({ entity: "climate.dorm", window_entity: "binary_sensor.ventana" });
 ok("fila visible solo con ventana", c._rows.power.style.display === "", c._rows.power.style.display);
 ok("value vacio sin potencia",      c._rows.power.querySelector(".value").textContent === "", c._rows.power.querySelector(".value").textContent);
+
+console.log("\n--- caso 1h: timer inactivo");
+function mkT(cfg) {
+  const c = new CARD(); c.setConfig(cfg); c._hass = hass;
+  const f = makeEl("div");
+  const t = makeEl("div");
+  c._rows = { power: c._addRow(f, "mdi:flash", null, true), energy: c._addRow(f, "mdi:x", "Hoy"), warn: makeEl("div"), timer: t };
+  t.querySelector(".minus").addEventListener("click", () => c._nudge(-1));
+  t.querySelector(".plus").addEventListener("click", () => c._nudge(1));
+  t.querySelector(".go").addEventListener("click", () => c._go());
+  c._update(); c._tick(false);
+  return c;
+}
+const TCFG = { entity: "timer.t_idle", minutes_entity: "input_number.mins", button_entity: "input_button.b" };
+c = mkT({ entity: "climate.dorm", power_entity: "sensor.pot", timer: TCFG });
+ok("muestra los minutos",     c._rows.timer.querySelector(".mins").textContent === "60 min", c._rows.timer.querySelector(".mins").textContent);
+ok("boton dice Programar",    c._rows.timer.querySelector(".go").textContent === "Programar", c._rows.timer.querySelector(".go").textContent);
+ok("+/- visibles",            c._rows.timer.querySelector(".minus").style.display === "", c._rows.timer.querySelector(".minus").style.display);
+calls.length = 0;
+c._rows.timer.querySelector(".plus").click();
+ok("+ sube segun el step (60->90)", JSON.stringify(calls[0]) === JSON.stringify({d:"input_number",srv:"set_value",data:{entity_id:"input_number.mins",value:90}}), calls[0]);
+calls.length = 0;
+c._rows.timer.querySelector(".go").click();
+ok("Programar aprieta el input_button", calls[0].d === "input_button" && calls[0].srv === "press", calls[0]);
+
+console.log("\n--- caso 1i: timer corriendo");
+c = mkT({ entity: "climate.dorm", power_entity: "sensor.pot", timer: { ...TCFG, entity: "timer.t_run" } });
+ok("cuenta regresiva mm:ss", /^Apaga en 42:\d\d$/.test(c._rows.timer.querySelector(".mins").textContent), c._rows.timer.querySelector(".mins").textContent);
+ok("boton pasa a Cancelar",  c._rows.timer.querySelector(".go").textContent === "Cancelar", c._rows.timer.querySelector(".go").textContent);
+ok("+/- se ocultan",         c._rows.timer.querySelector(".plus").style.display === "none", c._rows.timer.querySelector(".plus").style.display);
+ok("fila marcada running",   c._rows.timer.className === "timerrow running", c._rows.timer.className);
+calls.length = 0;
+c._rows.timer.querySelector(".go").click();
+ok("Cancelar llama timer.cancel", calls[0].d === "timer" && calls[0].srv === "cancel", calls[0]);
+
+console.log("\n--- caso 1j: sin button_entity arranca el timer directo");
+c = mkT({ entity: "climate.dorm", timer: { entity: "timer.t_idle", minutes_entity: "input_number.mins" } });
+calls.length = 0;
+c._rows.timer.querySelector(".go").click();
+ok("timer.start con 3600 s", calls[0].srv === "start" && calls[0].data.duration === 3600, calls[0]);
 
 console.log("\n--- caso 2: sin energia ni ventana (ej. Cocina/Oficina)");
 c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });
