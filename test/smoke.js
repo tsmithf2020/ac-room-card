@@ -596,7 +596,7 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   hass.states["climate.conFan"].attributes.current_temperature = 21.64;
   hass.states["climate.conFan"].attributes.temperature = 26;
   const mkR = (cfg) => {
-    const c = new ROOMS(); c.setConfig(cfg); c._hass = hass; c._build(); c._update(); return c;
+    const c = new ROOMS(); c.setConfig(cfg); c._hass = hass; c._piezas = cfg.rooms || []; c._build(); c._update(); return c;
   };
   const c9 = mkR({ rooms: [
     { entity: "climate.conFan", name: "Pieza", power_entity: "sensor.pot", temp_entity: "sensor.temp",
@@ -784,8 +784,10 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
     ok("cerrar lo desmonta",            c14._overlay === null, c14._overlay);
   })().then(() => {
 
-  try { new ROOMS().setConfig({}); ok("sin rooms lanza error", false, "no lanzo"); }
-  catch (e) { ok("sin rooms lanza error claro", /rooms/.test(e.message), e.message); }
+  try { new ROOMS().setConfig({}); ok("sin rooms NO lanza: descubre solo", true, ""); }
+  catch (e) { ok("sin rooms NO lanza: descubre solo", false, e.message); }
+  try { new ROOMS().setConfig({ rooms: [] }); ok("rooms vacio si lanza", false, "no lanzo"); }
+  catch (e) { ok("rooms vacio si lanza error claro", /rooms/.test(e.message), e.message); }
 
   console.log(fail === 0 ? "\n=== TODO PASA ===" : `\n=== ${fail} FALLAS ===`);
   process.exit(fail ? 1 : 0);

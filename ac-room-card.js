@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.25.1";
+const VERSION = "0.26.0";
 
 const T = {
   today: "Hoy",
@@ -1203,7 +1203,10 @@ class AcRoomsCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !Array.isArray(config.rooms) || !config.rooms.length) {
+    // `rooms` es opcional: sin el, se descubren solas leyendo el dashboard.
+    if (!config) throw new Error(RT.empty);
+    if (config.rooms !== undefined && config.rooms !== "auto" &&
+        (!Array.isArray(config.rooms) || !config.rooms.length)) {
       throw new Error(RT.empty);
     }
     this._config = { ...config, labels: { ...RT, ...(config.labels || {}) } };
@@ -1218,7 +1221,8 @@ class AcRoomsCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 1 + Math.ceil(this._config ? this._config.rooms.length * 0.7 : 1);
+    const n = (this._piezas || (Array.isArray(this._config && this._config.rooms) ? this._config.rooms : [])).length;
+    return 1 + Math.ceil((n || 3) * 0.7);
   }
 
   /* ---------- estado de una pieza ---------- */
@@ -1373,12 +1377,40 @@ class AcRoomsCard extends HTMLElement {
     this._closePopup();
   }
 
+  /* Sin `rooms`, se leen del propio dashboard: cualquier ac-room-card que
+     exista pasa a ser una fila, sin tener que repetir su configuracion. */
+  async _descubrir() {
+    const cfg = this._config;
+    if (Array.isArray(cfg.rooms) && cfg.rooms.length) return cfg.rooms;
+    const partes = String((window.location && window.location.pathname) || "").split("/").filter(Boolean);
+    const url_path = partes[0] && partes[0] !== "lovelace" ? partes[0] : null;
+    let lov;
+    try {
+      lov = await this._hass.callWS({ type: "lovelace/config", url_path });
+    } catch (e) {
+      return [];
+    }
+    const encontradas = [];
+    const recorrer = (o) => {
+      if (Array.isArray(o)) { o.forEach(recorrer); return; }
+      if (!o || typeof o !== "object") return;
+      if (o.type === "custom:ac-room-card") { encontradas.push(o); return; }
+      if (Array.isArray(o.cards)) recorrer(o.cards);
+      if (Array.isArray(o.sections)) recorrer(o.sections);
+    };
+    const vistas = (lov && lov.views ? lov.views : [])
+      .filter((v) => !cfg.discover_view || v.path === cfg.discover_view);
+    vistas.forEach(recorrer);
+    return encontradas;
+  }
+
   /* ---------- construccion ---------- */
 
-  _render() {
+  async _render() {
     if (!this._config || !this._hass) return;
     if (!this._built) {
       this._built = true;
+      this._piezas = await this._descubrir();
       this._build();
     }
     this._update();
@@ -1417,12 +1449,13 @@ class AcRoomsCard extends HTMLElement {
     // Ancho fijo para la columna de ventiladores segun la pieza que mas
     // tiene, para que el icono de ventana caiga siempre en el mismo x.
     const cols = this._cols();
+    const piezas = this._piezas || [];
     const maxFans = cols.has("fans")
-      ? Math.max(1, ...this._config.rooms.map((r) => normEntries(r.fans).length))
+      ? Math.max(1, ...piezas.map((r) => normEntries(r.fans).length))
       : 1;
     cont.style.setProperty("--acrc-fans", String(maxFans));
 
-    this._filas = this._config.rooms.map((r) => {
+    this._filas = piezas.map((r) => {
       const fila = document.createElement("div");
       fila.className = "room";
       fila.innerHTML =

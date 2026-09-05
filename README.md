@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.25.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.26.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -478,8 +478,13 @@ rooms:
       - entity: input_boolean.kids_ac_heat
 ```
 
-Each room takes **the same block as `ac-room-card`**, so you can copy a card's
-config straight in. Fields it uses: `entity`, `name`, `power_entity`,
+**Leave `rooms` out entirely and it finds them itself**, reading the dashboard
+for every `custom:ac-room-card` you have — including ones nested inside a
+`stack-in-card` — so adding a room to a view is all it takes to have it appear
+here too. `discover_view: <path>` limits the search to one view.
+
+Or list them yourself. Each room takes **the same block as `ac-room-card`**, so
+you can copy a card's config straight in. Fields it uses: `entity`, `name`, `power_entity`,
 `temp_entity`, `window_entity` (with battery), `fans`, `modes`, `timer`,
 `battery_warn`.
 
@@ -559,10 +564,11 @@ you are aiming at a button.
 ## Development
 
 ```bash
-node test/smoke.js
+node test/smoke.js      # 221 assertions
+node test/discover.js   # 7 more, for room auto-discovery
 ```
 
-220 assertions, no browser: a minimal DOM shim exercises value formatting,
+No browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.
