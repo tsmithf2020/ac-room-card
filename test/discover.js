@@ -50,6 +50,30 @@ const nuevo = (cfg, h) => { const c = new ROOMS(); c.setConfig(cfg); c._hass = h
   p = await nuevo({ rooms:[{ entity:"climate.y" }] }, hassOK)._descubrir();
   ok("con rooms explicito no descubre", p.length===1 && p[0].entity==="climate.y", p);
 
+  p = await nuevo({ exclude:["Ajena","Garage"] }, hassOK)._descubrir();
+  ok("exclude por nombre saca esas piezas", p.length===1 && p[0].name==="Dorm", p.map(x=>x.name));
+  p = await nuevo({ exclude:["climate.x"] }, hassOK)._descubrir();
+  ok("exclude tambien acepta entity_id", !p.some(x=>x.entity==="climate.x"), p.map(x=>x.name));
+  p = await nuevo({ rooms:[{name:"A"},{name:"B"}], exclude:["B"] }, hassOK)._descubrir();
+  ok("exclude aplica tambien a la lista escrita a mano", p.length===1 && p[0].name==="A", p.map(x=>x.name));
+  p = await nuevo({ exclude:[] }, hassOK)._descubrir();
+  ok("exclude vacio no saca nada", p.length===3, p.length);
+
+  console.log("\n--- editor del rooms card ---");
+  const ED = DEFS["ac-rooms-card-editor"];
+  ok("el editor esta registrado", !!ED, Object.keys(DEFS));
+  {
+    const e = new ED(); e.setConfig({}); e._hass = hassOK;
+    const op = await e._cargarOpciones();
+    ok("ofrece las piezas encontradas para excluir",
+       op.piezas.length===3 && op.piezas.includes("Garage"), op.piezas);
+    ok("ofrece las vistas del dashboard", op.vistas.map(v=>v.value).join(",")==="aires,otra",
+       op.vistas.map(v=>v.value));
+    const esq = JSON.stringify(e._esquema(op));
+    for (const k of ["title","discover_view","columns","exclude","sort","popup"])
+      ok("el formulario tiene "+k, esq.includes('"'+k+'"'), k);
+  }
+
   p = await nuevo({}, hassMal)._descubrir();
   ok("si el websocket falla devuelve vacio, sin romper", Array.isArray(p) && p.length===0, p);
 

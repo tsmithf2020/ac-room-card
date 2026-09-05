@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.26.0";
+const VERSION = "0.27.0";
 
 const T = {
   today: "Hoy",
@@ -1379,9 +1379,18 @@ class AcRoomsCard extends HTMLElement {
 
   /* Sin `rooms`, se leen del propio dashboard: cualquier ac-room-card que
      exista pasa a ser una fila, sin tener que repetir su configuracion. */
+  /* Quita las piezas excluidas. Se puede excluir por nombre (lo que se ve) o
+     por entity_id, para que sirva tambien con piezas sin nombre. */
+  _filtrar(lista) {
+    const ex = this._config.exclude;
+    if (!Array.isArray(ex) || !ex.length) return lista;
+    const fuera = new Set(ex);
+    return lista.filter((r) => !fuera.has(r.name) && !fuera.has(r.entity));
+  }
+
   async _descubrir() {
     const cfg = this._config;
-    if (Array.isArray(cfg.rooms) && cfg.rooms.length) return cfg.rooms;
+    if (Array.isArray(cfg.rooms) && cfg.rooms.length) return this._filtrar(cfg.rooms);
     const partes = String((window.location && window.location.pathname) || "").split("/").filter(Boolean);
     const url_path = partes[0] && partes[0] !== "lovelace" ? partes[0] : null;
     let lov;
@@ -1401,7 +1410,7 @@ class AcRoomsCard extends HTMLElement {
     const vistas = (lov && lov.views ? lov.views : [])
       .filter((v) => !cfg.discover_view || v.path === cfg.discover_view);
     vistas.forEach(recorrer);
-    return encontradas;
+    return this._filtrar(encontradas);
   }
 
   /* ---------- construccion ---------- */
@@ -1732,23 +1741,115 @@ class AcRoomsCard extends HTMLElement {
 }
 
 
+const ROOMS_LABELS = {
+  title: "Titulo",
+  discover_view: "Buscar solo en esta vista (vacio = todo el dashboard)",
+  columns: "Columnas de cada linea",
+  sort: "Orden",
+  popup: "Al tocar una pieza, abrir su tarjeta completa",
+  exclude: "Piezas a excluir",
+};
+
 class AcRoomsCardEditor extends HTMLElement {
-  setConfig(config) { this._config = config || {}; this._render(); }
-  set hass(hass) { this._hass = hass; this._render(); }
-  _render() {
-    if (this.innerHTML) return;
-    this.innerHTML =
-      '<div style="padding:8px 4px;font-size:14px;line-height:1.5;' +
-      'color:var(--primary-text-color)">' +
-      '<b>AC Rooms Card</b> se configura en YAML: cada pieza en <code>rooms</code> ' +
-      'acepta el mismo bloque que <code>ac-room-card</code>, para copiar y pegar.' +
-      '<pre style="font-size:12px;overflow:auto;background:var(--secondary-background-color,#f1f1f1);' +
-      'padding:8px;border-radius:6px">rooms:\n  - entity: climate.pieza\n    name: Pieza\n' +
-      '    power_entity: sensor.pieza_potencia\n    temp_entity: sensor.pieza_temp\n' +
-      '    window_entity: [binary_sensor.pieza_ventana]\n    fans: [fan.pieza]</pre>' +
-      'Opcional: <code>title</code> y <code>sort: active</code> (encendidas primero).' +
-      '</div>';
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
   }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  /* Las opciones de "excluir" y de "vista" salen del propio dashboard, para
+     que sean las piezas y vistas que el usuario realmente tiene. */
+  async _cargarOpciones() {
+    if (this._opciones) return this._opciones;
+    const partes = String((window.location && window.location.pathname) || "").split("/").filter(Boolean);
+    const url_path = partes[0] && partes[0] !== "lovelace" ? partes[0] : null;
+    let lov = null;
+    try { lov = await this._hass.callWS({ type: "lovelace/config", url_path }); } catch (e) { lov = null; }
+    const piezas = [];
+    const vistas = [];
+    const recorrer = (o) => {
+      if (Array.isArray(o)) { o.forEach(recorrer); return; }
+      if (!o || typeof o !== "object") return;
+      if (o.type === "custom:ac-room-card") {
+        const v = o.name || o.entity;
+        if (v && !piezas.includes(v)) piezas.push(v);
+        return;
+      }
+      if (Array.isArray(o.cards)) recorrer(o.cards);
+      if (Array.isArray(o.sections)) recorrer(o.sections);
+    };
+    for (const v of (lov && lov.views ? lov.views : [])) {
+      if (v.path) vistas.push({ value: v.path, label: `${v.title || v.path} (${v.path})` });
+      recorrer(v);
+    }
+    this._opciones = { piezas, vistas };
+    return this._opciones;
+  }
+
+  _esquema(op) {
+    return [
+      { name: "title", selector: { text: {} } },
+      { name: "discover_view", selector: { select: { mode: "dropdown", options: op.vistas } } },
+      { name: "columns", selector: { select: { multiple: true, mode: "list", options: [
+        { value: "temps", label: "Temperaturas" },
+        { value: "power", label: "Potencia" },
+        { value: "window", label: "Ventanas" },
+        { value: "timer", label: "Temporizador" },
+        { value: "fans", label: "Ventiladores y conmutables" },
+      ] } } },
+      { name: "exclude", selector: { select: { multiple: true, mode: "list",
+        options: op.piezas.map((p) => ({ value: p, label: p })) } } },
+      { name: "", type: "grid", schema: [
+        { name: "sort", selector: { select: { mode: "dropdown", options: [
+          { value: "configured", label: "Como estan en el dashboard" },
+          { value: "active", label: "Las encendidas primero" },
+        ] } } },
+        { name: "popup", selector: { boolean: {} } },
+      ]},
+    ];
+  }
+
+  async _render() {
+    if (!this._config || !this._hass) return;
+    const op = await this._cargarOpciones();
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (sc) => ROOMS_LABELS[sc.name] || sc.name;
+      this._form.addEventListener("value-changed", (ev) => {
+        const d = { ...ev.detail.value };
+        const cfg = { ...this._config, ...d, type: this._config.type || "custom:ac-rooms-card" };
+        for (const k of ["title", "discover_view", "columns", "exclude", "sort"]) {
+          const v = cfg[k];
+          if (v === undefined || v === "" || v === null || (Array.isArray(v) && !v.length)) delete cfg[k];
+        }
+        if (cfg.popup !== false) delete cfg.popup;   // true es el default
+        this._config = cfg;
+        this.dispatchEvent(new CustomEvent("config-changed", {
+          detail: { config: cfg }, bubbles: true, composed: true,
+        }));
+      });
+      this.appendChild(this._form);
+      this._nota = document.createElement("div");
+      this._nota.style.cssText = "padding:8px 4px 0;font-size:12px;color:var(--secondary-text-color)";
+      this.appendChild(this._nota);
+    }
+    this._form.hass = this._hass;
+    this._form.schema = this._esquema(op);
+    const d = { popup: this._config.popup !== false };
+    for (const k of ["title", "discover_view", "columns", "exclude", "sort"]) {
+      if (this._config[k] !== undefined) d[k] = this._config[k];
+    }
+    this._form.data = d;
+    this._nota.textContent = Array.isArray(this._config.rooms) && this._config.rooms.length
+      ? "Esta tarjeta tiene una lista de piezas escrita a mano; se usa esa en vez de buscarlas."
+      : `Se agregan solas todas las tarjetas de pieza que encuentre (${op.piezas.length} ahora mismo).`;
+  }
+
+  static get filtrar() { return null; }
 }
 
 if (!customElements.get("ac-rooms-card-editor")) {

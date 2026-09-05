@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.26.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.27.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -481,7 +481,21 @@ rooms:
 **Leave `rooms` out entirely and it finds them itself**, reading the dashboard
 for every `custom:ac-room-card` you have — including ones nested inside a
 `stack-in-card` — so adding a room to a view is all it takes to have it appear
-here too. `discover_view: <path>` limits the search to one view.
+here too. `discover_view: <path>` limits the search to one view, and `exclude` drops the
+ones you do not want:
+
+```yaml
+type: custom:ac-rooms-card
+discover_view: climate
+exclude: [Garage, Terrace]
+```
+
+Entries match a room's `name` or its `entity`. It applies to a hand-written
+`rooms` list too.
+
+**Both cards have a visual editor.** The rooms one offers your actual views in a
+dropdown and your actual rooms as checkboxes to exclude, so it is all pickable
+rather than typed.
 
 Or list them yourself. Each room takes **the same block as `ac-room-card`**, so
 you can copy a card's config straight in. Fields it uses: `entity`, `name`, `power_entity`,
@@ -565,7 +579,7 @@ you are aiming at a button.
 
 ```bash
 node test/smoke.js      # 221 assertions
-node test/discover.js   # 7 more, for room auto-discovery
+node test/discover.js   # 20 more, for discovery and the rooms editor
 ```
 
 No browser: a minimal DOM shim exercises value formatting,
