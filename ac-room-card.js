@@ -7,10 +7,9 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 const T = {
-  power: "Potencia",
   today: "Hoy",
   month: "Mes",
   window: "Ventana",
@@ -116,7 +115,7 @@ class AcRoomCard extends HTMLElement {
     footer.className = "footer";
     card.appendChild(footer);
 
-    this._rows.power = this._addRow(footer, "mdi:flash", cfg.labels.power, true);
+    this._rows.power = this._addRow(footer, "mdi:flash", null, true);
     this._rows.energy = this._addRow(footer, "mdi:lightning-bolt-outline", cfg.labels.today);
 
     const warn = document.createElement("div");
@@ -135,9 +134,10 @@ class AcRoomCard extends HTMLElement {
   _addRow(parent, icon, label, withWindow) {
     const row = document.createElement("div");
     row.className = "row";
+    if (withWindow) row.className = "row main";
     row.innerHTML =
       `<ha-icon icon="${icon}"></ha-icon>` +
-      `<span class="label">${label}</span>` +
+      (label === null ? "" : `<span class="label">${label}</span>`) +
       `<span class="value"></span>` +
       (withWindow ? `<ha-icon class="win"></ha-icon>` : "");
     parent.appendChild(row);
@@ -216,7 +216,6 @@ class AcRoomCard extends HTMLElement {
       this._rows.power.style.display = "none";
     } else {
       this._rows.power.style.display = "";
-      this._rows.power.querySelector(".label").textContent = p ? L.power : "";
       this._rows.power.querySelector(".value").textContent = p ? p.text : "";
     }
 
@@ -266,6 +265,7 @@ class AcRoomCard extends HTMLElement {
       .row ha-icon { --mdc-icon-size: 20px; color: var(--state-icon-color, var(--paper-item-icon-color, #44739e)); flex: 0 0 auto; }
       .row .label { color: var(--secondary-text-color); flex: 0 0 auto; }
       .row .value { margin-left: auto; text-align: right; font-weight: 500; }
+      .row.main .value { margin-left: 0; }
       .row .win { margin-left: 10px; --mdc-icon-size: 20px; flex: 0 0 auto; }
       .row .win.closed  { color: var(--success-color, #43a047); }
       .row .win.open    { color: var(--error-color, #db4437); }

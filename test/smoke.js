@@ -43,7 +43,7 @@ function mk(cfg) {
   // Simulamos lo que arma _build(), sin loadCardHelpers.
   const f = makeEl("div");
   c._rows = {
-    power:  c._addRow(f, "mdi:flash", "Potencia", true),
+    power:  c._addRow(f, "mdi:flash", null, true),
     energy: c._addRow(f, "mdi:x", "Hoy"),
     warn:   makeEl("div"),
   };
@@ -69,6 +69,8 @@ ok("abierta -> clase open (rojo)",  win().className === "win open", win().classN
 ok("abierta -> icono window-open",  win().getAttribute("icon") === "mdi:window-open-variant", win().getAttribute("icon"));
 ok("tooltip dice Abierta",          win().getAttribute("title") === "Ventana: Abierta", win().getAttribute("title"));
 ok("aviso apagado por defecto",     c._rows.warn.style.display === "none", c._rows.warn.style.display);
+ok("NO se dibuja la etiqueta Potencia", !/class="label"/.test(c._rows.power.innerHTML), c._rows.power.innerHTML);
+ok("fila principal marcada .main",  c._rows.power.className === "row main", c._rows.power.className);
 
 console.log("\n--- caso 1b: ventana cerrada -> verde");
 hass.states["binary_sensor.ventana"].state = "off";
@@ -85,7 +87,7 @@ ok("fila de potencia visible", c._rows.power.style.display === "", c._rows.power
 console.log("\n--- caso 1d: ventana sin potencia -> la fila igual aparece");
 c = mk({ entity: "climate.dorm", window_entity: "binary_sensor.ventana" });
 ok("fila visible solo con ventana", c._rows.power.style.display === "", c._rows.power.style.display);
-ok("label vacio sin potencia",      c._rows.power.querySelector(".label").textContent === "", c._rows.power.querySelector(".label").textContent);
+ok("value vacio sin potencia",      c._rows.power.querySelector(".value").textContent === "", c._rows.power.querySelector(".value").textContent);
 
 console.log("\n--- caso 2: sin energia ni ventana (ej. Cocina/Oficina)");
 c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });

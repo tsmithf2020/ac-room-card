@@ -1,9 +1,15 @@
 # AC Room Card
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
-le agrega, debajo, una linea compacta con la **potencia instantanea** y, al
-lado, el **simbolo de la ventana** de la pieza: **verde si esta cerrada, rojo si
-esta abierta**. Opcionalmente una segunda linea con la energia consumida.
+le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
+consumiendo y, al lado, el **simbolo de la ventana** de la pieza — **verde si
+esta cerrada, rojo si esta abierta**. Sin etiquetas de texto.
+
+```
+⚡  12 W  ⬜
+```
+
+Opcionalmente, una segunda linea con la energia consumida.
 
 No copia codigo de Home Assistant. Instancia el card integrado en tiempo de
 ejecucion via `loadCardHelpers()`, asi que hereda su comportamiento, sus
@@ -52,7 +58,7 @@ features:
 | `show_warning` | bool | no | `false` por defecto. Si lo activas, agrega un aviso de texto cuando la ventana esta abierta *y* el aire andando. El icono rojo ya cubre el caso, por eso viene apagado. |
 | `base_card` | map | no | Config completa del card que va arriba. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
 | `features` | list | no | Se pasa tal cual al `thermostat` integrado. Se ignora si usas `base_card`. |
-| `labels` | map | no | Sobrescribe los textos (`power`, `today`, `month`, `window`, `open`, `closed`, `warn`, `unavailable`). |
+| `labels` | map | no | Sobrescribe los textos (`today`, `month`, `window`, `open`, `closed`, `warn`, `unavailable`). |
 
 Cada cosa se oculta sola si no le pasas su entidad: sin `window_entity` no hay
 icono, sin `power_entity` no hay numero, sin sensores de energia no hay segunda
