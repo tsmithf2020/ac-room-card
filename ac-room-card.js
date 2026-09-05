@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.18.0";
+const VERSION = "0.19.0";
 
 const T = {
   today: "Hoy",
@@ -1180,6 +1180,13 @@ class AcRoomsCard extends HTMLElement {
 
   /* ---------- estado de una pieza ---------- */
 
+  /* Que columnas se dibujan. Por defecto todas; el detalle completo de cada
+     pieza siempre esta a un toque, en el popup. */
+  _cols() {
+    const c = this._config.columns;
+    return new Set(Array.isArray(c) && c.length ? c : ["temps", "power", "window", "timer", "fans"]);
+  }
+
   _modos(r) {
     return normEntries(r.modes);
   }
@@ -1319,7 +1326,10 @@ class AcRoomsCard extends HTMLElement {
 
     // Ancho fijo para la columna de ventiladores segun la pieza que mas
     // tiene, para que el icono de ventana caiga siempre en el mismo x.
-    const maxFans = Math.max(1, ...this._config.rooms.map((r) => normEntries(r.fans).length));
+    const cols = this._cols();
+    const maxFans = cols.has("fans")
+      ? Math.max(1, ...this._config.rooms.map((r) => normEntries(r.fans).length))
+      : 1;
     cont.style.setProperty("--acrc-fans", String(maxFans));
 
     this._filas = this._config.rooms.map((r) => {
@@ -1363,7 +1373,7 @@ class AcRoomsCard extends HTMLElement {
       // Ventiladores: se crean una vez, aca, porque son fijos por config
       const slot = fila.querySelector(".fans");
       const btns = [];
-      for (const f of normEntries(r.fans)) {
+      for (const f of (cols.has("fans") ? normEntries(r.fans) : [])) {
         const b = document.createElement("button");
         b.className = "rfan";
         b.dataset.entity = f.entity;
@@ -1377,6 +1387,13 @@ class AcRoomsCard extends HTMLElement {
         slot.appendChild(b);
         btns.push(b);
       }
+      // Columnas apagadas: fuera del flujo, para que no reserven hueco.
+      for (const [clave, sel] of [["temps", ".temps"], ["power", ".pw"],
+                                  ["window", ".winwrap"], ["timer", ".tmr"],
+                                  ["fans", ".fans"]]) {
+        if (!cols.has(clave)) fila.querySelector(sel).style.display = "none";
+      }
+
       cont.appendChild(fila);
       return { r, fila, btns };
     });
@@ -1495,7 +1512,7 @@ class AcRoomsCard extends HTMLElement {
       }
       .pwr ha-icon { --mdc-icon-size: 24px; }
       .pwr.on { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
-      .rname { flex: 1 1 auto; min-width: 64px; cursor: pointer;
+      .rname { flex: 1 1 auto; min-width: 72px; cursor: pointer;
                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .room.on .rname { font-weight: 500; }
       .temps { flex: 0 0 auto; width: 108px; text-align: right; cursor: pointer;

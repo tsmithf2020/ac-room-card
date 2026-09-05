@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.18.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.19.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -430,7 +430,7 @@ mean six screens of scrolling.
 ```yaml
 type: custom:ac-rooms-card
 title: Air conditioning
-sort: active          # optional: running rooms first
+columns: [temps, power]   # optional: keep the line to the essentials
 rooms:
   - entity: climate.bedroom
     name: Bedroom
@@ -467,6 +467,10 @@ is nothing to schedule.
 | Timer | Starts it (or cancels a running one) |
 | Fan icons | Toggles that fan |
 
+`columns` picks what the line shows, from `temps`, `power`, `window`, `timer`
+and `fans`. All five by default. On a phone `[temps, power]` reads best — room
+names stop being truncated, and everything else is one tap away in the popup.
+
 Columns are fixed-width and the fan column is sized from whichever room has the
 most, so every icon lands in the same place down the list instead of drifting
 with each row's contents. A room without a window or a timer keeps its slot
@@ -491,7 +495,7 @@ you are aiming at a button.
 node test/smoke.js
 ```
 
-170 assertions, no browser: a minimal DOM shim exercises value formatting,
+178 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

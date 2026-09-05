@@ -569,6 +569,26 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   hass.states["climate.conFan"].state = "cool";
   c11._tick(false);
 
+  console.log("\n  -- columnas configurables --");
+  const cCols = mkR({ columns: ["temps", "power"], rooms: [
+    { entity: "climate.conFan", name: "Pieza", power_entity: "sensor.pot",
+      window_entity: ["binary_sensor.v1"], fans: ["fan.uno", "fan.dos"],
+      timer: { entity: "timer.t_run" } }]});
+  const fc = cCols._filas[0].fila;
+  ok("temps visible",        fc.querySelector(".temps").style.display !== "none", fc.querySelector(".temps").style.display);
+  ok("power visible",        fc.querySelector(".pw").style.display !== "none", fc.querySelector(".pw").style.display);
+  ok("ventana fuera",        fc.querySelector(".winwrap").style.display === "none", fc.querySelector(".winwrap").style.display);
+  ok("timer fuera",          fc.querySelector(".tmr").style.display === "none", fc.querySelector(".tmr").style.display);
+  ok("ventiladores fuera",   fc.querySelector(".fans").style.display === "none", fc.querySelector(".fans").style.display);
+  ok("sin columna de fans no se crean botones", cCols._filas[0].btns.length === 0, cCols._filas[0].btns.length);
+  ok("y --acrc-fans queda en 1", fc.parentNode.style.getPropertyValue("--acrc-fans") === "1",
+     fc.parentNode.style.getPropertyValue("--acrc-fans"));
+
+  const cDef = mkR({ rooms: [{ entity: "climate.conFan", name: "P", fans: ["fan.uno"] }] });
+  ok("sin `columns` se dibujan todas",
+     cDef._filas[0].fila.querySelector(".winwrap").style.display !== "none" &&
+     cDef._filas[0].fila.querySelector(".fans").style.display !== "none", "alguna quedo fuera");
+
   console.log("\n  -- columnas alineadas y popup --");
   const c13 = mkR({ rooms: [
     { entity: "climate.conFan", name: "Una",  fans: ["fan.uno"] },
