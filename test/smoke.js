@@ -472,5 +472,67 @@ ok("borrar timer quita el bloque",  cleared.timer === undefined, cleared);
 ok("y aun asi conserva base_card",  !!cleared.base_card, cleared.base_card);
 ok("no toca lo que no maneja",      cleared.power_entity === "sensor.pot", cleared.power_entity);
 
+console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
+{
+  const ROOMS = DEFS["ac-rooms-card"];
+  ok("el rooms card esta registrado", !!ROOMS, Object.keys(DEFS));
+
+  hass.states["binary_sensor.v1"].state = "on";   // una abierta, la otra cerrada
+  hass.states["binary_sensor.v2"].state = "off";
+  hass.states["climate.conFan"].attributes.current_temperature = 21.64;
+  hass.states["climate.conFan"].attributes.temperature = 26;
+  const mkR = (cfg) => {
+    const c = new ROOMS(); c.setConfig(cfg); c._hass = hass; c._build(); c._update(); return c;
+  };
+  const c9 = mkR({ rooms: [
+    { entity: "climate.conFan", name: "Pieza", power_entity: "sensor.pot",
+      window_entity: ["binary_sensor.v1", "binary_sensor.v2"], fans: ["fan.uno"] },
+    { entity: "input_boolean.frio", name: "IR",
+      modes: [{ entity: "input_boolean.frio" }, { entity: "input_boolean.calor" }] },
+  ]});
+  const f0 = c9._filas[0].fila, f1 = c9._filas[1].fila;
+  ok("una fila por pieza",        c9._filas.length === 2, c9._filas.length);
+  ok("nombre de la pieza",        f0.querySelector(".rname").textContent === "Pieza", f0.querySelector(".rname").textContent);
+  ok("temperaturas actual->objetivo", /21\.6.*26/.test(f0.querySelector(".temps").innerHTML), f0.querySelector(".temps").innerHTML);
+  ok("potencia redondeada",       f0.querySelector(".pw").textContent === "1234 W", f0.querySelector(".pw").textContent);
+  ok("ventana naranja si va 1/2", f0.querySelector(".win").className === "win some", f0.querySelector(".win").className);
+  ok("climate encendido -> boton on", f0.querySelector(".pwr").className === "pwr on", f0.querySelector(".pwr").className);
+  ok("pieza IR con calor on tambien marca on", f1.querySelector(".pwr").className === "pwr on", f1.querySelector(".pwr").className);
+  ok("sin ventanas se oculta el icono", f1.querySelector(".winwrap").style.display === "none", f1.querySelector(".winwrap").style.display);
+
+  calls.length = 0;
+  f0.querySelector(".pwr")._ev.click({ stopPropagation() {} });
+  ok("apagar un climate llama climate.turn_off",
+     calls[0].d === "climate" && calls[0].srv === "turn_off" && calls[0].data.entity_id === "climate.conFan", calls[0]);
+  calls.length = 0;
+  f1.querySelector(".pwr")._ev.click({ stopPropagation() {} });
+  ok("apagar una pieza IR apaga el boolean encendido",
+     calls[0].d === "input_boolean" && calls[0].srv === "turn_off" && calls[0].data.entity_id === "input_boolean.calor", calls[0]);
+
+  calls.length = 0;
+  c9._filas[0].btns[0]._ev.click({ stopPropagation() {} });
+  ok("el ventilador de la fila togglea", calls[0].d === "homeassistant" && calls[0].srv === "toggle", calls[0]);
+
+  let ev = null;
+  c9.dispatchEvent = (e) => { ev = e; return true; };
+  f0.querySelector(".rname")._ev.click();
+  ok("tocar el nombre abre mas-info de la pieza", ev && ev.detail.entityId === "climate.conFan", ev && ev.detail);
+
+  // sort: active pone las encendidas primero
+  hass.states["climate.conFan"].state = "off";
+  const c10 = mkR({ sort: "active", rooms: [
+    { entity: "climate.conFan", name: "Apagada" },
+    { entity: "input_boolean.frio", name: "Encendida",
+      modes: [{ entity: "input_boolean.calor" }] },
+  ]});
+  ok("sort:active deja la encendida arriba",
+     Number(c10._filas[1].fila.style.order) < Number(c10._filas[0].fila.style.order),
+     [c10._filas[0].fila.style.order, c10._filas[1].fila.style.order]);
+  hass.states["climate.conFan"].state = "cool";
+
+  try { new ROOMS().setConfig({}); ok("sin rooms lanza error", false, "no lanzo"); }
+  catch (e) { ok("sin rooms lanza error claro", /rooms/.test(e.message), e.message); }
+}
+
 console.log(fail === 0 ? "\n=== TODO PASA ===" : `\n=== ${fail} FALLAS ===`);
 process.exit(fail ? 1 : 0);

@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.15.1";
+const VERSION = "0.16.0";
 
 const T = {
   today: "Hoy",
@@ -28,6 +28,58 @@ const T = {
   batLow: "pila baja",
   unavailable: "no disponible",
 };
+
+/* ---------- helpers compartidos ---------- */
+
+/* Acepta "sensor.x" o {entity, ...} y devuelve siempre objetos. */
+function normEntries(v) {
+  if (!v) return [];
+  return (Array.isArray(v) ? v : [v])
+    .map((x) => (typeof x === "string" ? { entity: x } : x))
+    .filter((x) => x && x.entity);
+}
+
+/* closed / some / all / unknown, mas el detalle para el tooltip. */
+function computeWindows(hass, lista, L) {
+  let abiertas = 0, conocidas = 0;
+  const detalle = [];
+  for (const w of lista) {
+    const st = hass.states[w.entity];
+    const nombre = w.name || (st && st.attributes.friendly_name) || w.entity;
+    if (!st || st.state === "unavailable" || st.state === "unknown") {
+      detalle.push(`${nombre}: ${L.unavailable}`);
+      continue;
+    }
+    conocidas++;
+    const abierta = st.state === "on";
+    if (abierta) abiertas++;
+    detalle.push(`${nombre}: ${abierta ? L.open : L.closed}`);
+  }
+  let estado = "unknown";
+  if (conocidas > 0) estado = abiertas === 0 ? "closed" : (abiertas === conocidas ? "all" : "some");
+  return { estado, abiertas, conocidas, detalle, lista };
+}
+
+function batteriesLow(hass, lista, umbral) {
+  const bajos = [];
+  for (const w of lista) {
+    if (!w.battery) continue;
+    const st = hass.states[w.battery];
+    if (!st) continue;
+    const v = parseFloat(st.state);
+    if (!Number.isNaN(v) && v <= umbral) {
+      bajos.push(`${w.name || st.attributes.friendly_name || w.battery}: ${v}%`);
+    }
+  }
+  return bajos;
+}
+
+function moreInfo(el, entityId) {
+  if (!entityId) return;
+  el.dispatchEvent(new CustomEvent("hass-more-info", {
+    detail: { entityId }, bubbles: true, composed: true,
+  }));
+}
 
 class AcRoomCard extends HTMLElement {
   constructor() {
@@ -420,56 +472,21 @@ class AcRoomCard extends HTMLElement {
   /* ---------- ventanas ---------- */
 
   _windowList() {
-    const w = this._config.window_entity;
-    if (!w) return [];
-    return (Array.isArray(w) ? w : [w])
-      .map((x) => (typeof x === "string" ? { entity: x } : x))
-      .filter((x) => x && x.entity);
+    return normEntries(this._config.window_entity);
   }
 
   /* closed = todas cerradas, some = algunas, all = todas abiertas.
      Con una sola ventana `some` no puede ocurrir, asi que el naranjo
      aparece solo cuando de verdad hay algo parcial. */
   _windowState() {
-    const lista = this._windowList();
-    let abiertas = 0, conocidas = 0;
-    const detalle = [];
-    for (const w of lista) {
-      const st = this._hass.states[w.entity];
-      const nombre = w.name || (st && st.attributes.friendly_name) || w.entity;
-      if (!st || st.state === "unavailable" || st.state === "unknown") {
-        detalle.push(`${nombre}: ${this._config.labels.unavailable}`);
-        continue;
-      }
-      conocidas++;
-      const abierta = st.state === "on";
-      if (abierta) abiertas++;
-      detalle.push(`${nombre}: ${abierta ? this._config.labels.open : this._config.labels.closed}`);
-    }
-    let estado = "unknown";
-    if (conocidas > 0) {
-      if (abiertas === 0) estado = "closed";
-      else if (abiertas === conocidas) estado = "all";
-      else estado = "some";
-    }
-    return { estado, abiertas, conocidas, detalle, lista };
+    return computeWindows(this._hass, this._windowList(), this._config.labels);
   }
 
   /* Pila baja de cualquiera de los sensores de ventana. Es una falla
      silenciosa: el sensor deja de reportar y la ventana parece cerrada. */
   _batteryLow() {
     const umbral = this._config.battery_warn === undefined ? 20 : Number(this._config.battery_warn);
-    const bajos = [];
-    for (const w of this._windowList()) {
-      if (!w.battery) continue;
-      const st = this._hass.states[w.battery];
-      if (!st) continue;
-      const v = parseFloat(st.state);
-      if (!Number.isNaN(v) && v <= umbral) {
-        bajos.push(`${w.name || (st.attributes.friendly_name || w.battery)}: ${v}%`);
-      }
-    }
-    return bajos;
+    return batteriesLow(this._hass, this._windowList(), umbral);
   }
 
   /* ---------- interaccion ---------- */
@@ -477,10 +494,7 @@ class AcRoomCard extends HTMLElement {
   /* Abre el dialogo estandar de Home Assistant. composed:true es obligatorio:
      sin eso el evento no sale del shadow DOM del card. */
   _moreInfo(entityId) {
-    if (!entityId) return;
-    this.dispatchEvent(new CustomEvent("hass-more-info", {
-      detail: { entityId }, bubbles: true, composed: true,
-    }));
+    moreInfo(this, entityId);
   }
 
   _bindMoreInfo(el, getEntity) {
@@ -496,12 +510,7 @@ class AcRoomCard extends HTMLElement {
   /* ---------- ventiladores ---------- */
 
   _fanList() {
-    const f = this._config.fans;
-    if (!f) return [];
-    const arr = Array.isArray(f) ? f : [f];
-    return arr
-      .map((x) => (typeof x === "string" ? { entity: x } : x))
-      .filter((x) => x && x.entity);
+    return normEntries(this._config.fans);
   }
 
   _fanIsOn(entityId) {
@@ -1104,6 +1113,348 @@ class AcRoomCardEditor extends HTMLElement {
 if (!customElements.get("ac-room-card-editor")) {
   customElements.define("ac-room-card-editor", AcRoomCardEditor);
 }
+
+
+/* ==================================================================
+   ac-rooms-card - vista compacta, una linea por pieza.
+   Pensada para el celular: cada pieza acepta el mismo bloque de
+   configuracion que ac-room-card, para copiar y pegar.
+   ================================================================== */
+
+const RT = {
+  off: "Apagado",
+  unavailable: "no disponible",
+  window: "Ventanas",
+  open: "Abierta",
+  closed: "Cerrada",
+  batLow: "pila baja",
+  empty: "Configura al menos una pieza en `rooms`",
+};
+
+class AcRoomsCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._filas = [];
+  }
+
+  static getConfigElement() {
+    return document.createElement("ac-rooms-card-editor");
+  }
+
+  static getStubConfig(hass, entities) {
+    const c = (entities || []).filter((e) => e.startsWith("climate.")).slice(0, 3);
+    return { rooms: c.map((e) => ({ entity: e })) };
+  }
+
+  setConfig(config) {
+    if (!config || !Array.isArray(config.rooms) || !config.rooms.length) {
+      throw new Error(RT.empty);
+    }
+    this._config = { ...config, labels: { ...RT, ...(config.labels || {}) } };
+    this._built = false;
+    if (this.shadowRoot) this.shadowRoot.innerHTML = "";
+    if (this._hass) this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 1 + Math.ceil(this._config ? this._config.rooms.length * 0.7 : 1);
+  }
+
+  /* ---------- estado de una pieza ---------- */
+
+  _modos(r) {
+    return normEntries(r.modes);
+  }
+
+  _encendida(r) {
+    const modos = this._modos(r);
+    if (modos.length) {
+      return modos.some((m) => {
+        const st = this._hass.states[m.entity];
+        return st && st.state === "on";
+      });
+    }
+    const st = this._hass.states[r.entity];
+    return !!st && !["off", "unavailable", "unknown"].includes(st.state);
+  }
+
+  _toggle(r) {
+    const modos = this._modos(r);
+    if (modos.length) {
+      if (this._encendida(r)) {
+        for (const m of modos) {
+          const st = this._hass.states[m.entity];
+          if (st && st.state === "on") {
+            this._hass.callService("input_boolean", "turn_off", { entity_id: m.entity });
+          }
+        }
+      } else {
+        this._hass.callService("input_boolean", "turn_on", { entity_id: modos[0].entity });
+      }
+      return;
+    }
+    const dominio = r.entity.split(".")[0];
+    this._hass.callService(dominio, this._encendida(r) ? "turn_off" : "turn_on", {
+      entity_id: r.entity,
+    });
+  }
+
+  /* actual → objetivo. Sin entidad climate, solo la temperatura de la pieza. */
+  _temps(r) {
+    const st = this._hass.states[r.entity];
+    const dec = (v) => (Number.isNaN(parseFloat(v)) ? null : Math.round(parseFloat(v) * 10) / 10);
+    let actual = null;
+    if (r.temp_entity && this._hass.states[r.temp_entity]) {
+      actual = dec(this._hass.states[r.temp_entity].state);
+    } else if (st && st.attributes.current_temperature !== undefined) {
+      actual = dec(st.attributes.current_temperature);
+    }
+    const objetivo = st && st.attributes.temperature !== undefined ? dec(st.attributes.temperature) : null;
+    return { actual, objetivo };
+  }
+
+  /* ---------- construccion ---------- */
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    if (!this._built) {
+      this._built = true;
+      this._build();
+    }
+    this._update();
+  }
+
+  _build() {
+    const card = document.createElement("ha-card");
+    if (this._config.title) {
+      const h = document.createElement("div");
+      h.className = "title";
+      h.textContent = this._config.title;
+      card.appendChild(h);
+    }
+    const cont = document.createElement("div");
+    cont.className = "rooms";
+    card.appendChild(cont);
+
+    this._filas = this._config.rooms.map((r) => {
+      const fila = document.createElement("div");
+      fila.className = "room";
+      fila.innerHTML =
+        `<button class="pwr" title=""><ha-icon icon="mdi:power"></ha-icon></button>` +
+        `<span class="rname"></span>` +
+        `<span class="temps"></span>` +
+        `<span class="pw"></span>` +
+        `<span class="winwrap"><ha-icon class="win"></ha-icon>` +
+        `<span class="batdot"></span></span>` +
+        `<span class="fans"></span>`;
+      fila.querySelector(".pwr").addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this._toggle(r);
+      });
+      fila.querySelector(".rname").addEventListener("click", () => moreInfo(this, r.entity));
+      fila.querySelector(".temps").addEventListener("click", () => moreInfo(this, r.entity));
+      fila.querySelector(".pw").addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        moreInfo(this, r.power_entity || r.entity);
+      });
+      fila.querySelector(".win").addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const lista = normEntries(r.window_entity);
+        const abierta = lista.find((x) => {
+          const st = this._hass.states[x.entity];
+          return st && st.state === "on";
+        });
+        moreInfo(this, (abierta || lista[0] || {}).entity);
+      });
+      // Ventiladores: se crean una vez, aca, porque son fijos por config
+      const slot = fila.querySelector(".fans");
+      const btns = [];
+      for (const f of normEntries(r.fans)) {
+        const b = document.createElement("button");
+        b.className = "rfan";
+        b.dataset.entity = f.entity;
+        const st = this._hass.states[f.entity];
+        b.dataset.label = f.name || (st && st.attributes.friendly_name) || f.entity;
+        b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>`;
+        b.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          this._hass.callService("homeassistant", "toggle", { entity_id: f.entity });
+        });
+        slot.appendChild(b);
+        btns.push(b);
+      }
+      cont.appendChild(fila);
+      return { r, fila, btns };
+    });
+
+    this.shadowRoot.innerHTML = "";
+    this.shadowRoot.appendChild(this._style());
+    this.shadowRoot.appendChild(card);
+  }
+
+  _update() {
+    const L = this._config.labels;
+    const orden = this._config.sort === "active" ? [...this._filas].sort(
+      (a, b) => Number(this._encendida(b.r)) - Number(this._encendida(a.r))) : this._filas;
+    orden.forEach((f, i) => { f.fila.style.order = String(i); });
+
+    for (const { r, fila, btns } of this._filas) {
+      const st = this._hass.states[r.entity];
+      const on = this._encendida(r);
+      const noExiste = !st;
+
+      fila.className = "room" + (on ? " on" : "") + (noExiste ? " gone" : "");
+      const pwr = fila.querySelector(".pwr");
+      pwr.className = on ? "pwr on" : "pwr";
+      pwr.title = on ? "" : L.off;
+
+      fila.querySelector(".rname").textContent =
+        r.name || (st && st.attributes.friendly_name) || r.entity;
+
+      const { actual, objetivo } = this._temps(r);
+      const tEl = fila.querySelector(".temps");
+      if (actual === null && objetivo === null) {
+        tEl.textContent = noExiste ? L.unavailable : "";
+      } else if (objetivo === null) {
+        tEl.textContent = `${actual} °`;
+      } else {
+        tEl.innerHTML = `${actual === null ? "–" : actual}<span class="arr">→</span>${objetivo}<span class="uom">°</span>`;
+      }
+
+      const pEl = fila.querySelector(".pw");
+      const ps = r.power_entity && this._hass.states[r.power_entity];
+      pEl.textContent = ps && !["unavailable", "unknown"].includes(ps.state)
+        ? `${Math.round(parseFloat(ps.state) || 0)} W` : "";
+
+      const lista = normEntries(r.window_entity);
+      const wrap = fila.querySelector(".winwrap");
+      const win = fila.querySelector(".win");
+      const dot = fila.querySelector(".batdot");
+      if (!lista.length) {
+        wrap.style.display = "none";
+      } else {
+        wrap.style.display = "";
+        const w = computeWindows(this._hass, lista, L);
+        const CLASES = { closed: "win closed", some: "win some", all: "win open", unknown: "win unknown" };
+        win.className = CLASES[w.estado];
+        win.setAttribute("icon", w.abiertas ? "mdi:window-open-variant" : "mdi:window-closed-variant");
+        const resumen = lista.length > 1 ? ` (${w.abiertas}/${w.conocidas})` : "";
+        win.setAttribute("title", `${L.window}${resumen}\n${w.detalle.join("\n")}`);
+        const umbral = r.battery_warn === undefined ? 20 : Number(r.battery_warn);
+        const bajos = batteriesLow(this._hass, lista, umbral);
+        dot.style.display = bajos.length ? "" : "none";
+        if (bajos.length) dot.setAttribute("title", `${L.batLow}\n${bajos.join("\n")}`);
+      }
+
+      for (const b of btns) {
+        const fst = this._hass.states[b.dataset.entity];
+        const fon = !!fst && fst.state === "on";
+        b.className = fon ? "rfan on" : "rfan off";
+        b.title = `${b.dataset.label}: ${!fst ? L.unavailable : fon ? "on" : "off"}`;
+      }
+    }
+  }
+
+  _style() {
+    const s = document.createElement("style");
+    s.textContent = `
+      ha-card { overflow: hidden; }
+      .title { padding: 14px 16px 4px; font-size: 16px; font-weight: 500;
+               color: var(--primary-text-color); }
+      .rooms { display: flex; flex-direction: column; padding: 4px 0 6px; }
+      .room {
+        display: flex; align-items: center; gap: 8px;
+        padding: 4px 12px; min-height: 40px;
+        font-size: 14px; color: var(--primary-text-color);
+      }
+      .room + .room { border-top: 1px solid var(--divider-color, #e0e0e0); }
+      .room.gone { opacity: .4; }
+      .pwr {
+        flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+        border: none; background: var(--secondary-background-color, #f1f1f1);
+        color: var(--secondary-text-color); padding: 0;
+      }
+      .pwr ha-icon { --mdc-icon-size: 20px; }
+      .pwr.on { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
+      .rname { flex: 1 1 auto; min-width: 0; cursor: pointer;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .room.on .rname { font-weight: 500; }
+      .temps { flex: 0 0 auto; cursor: pointer; font-variant-numeric: tabular-nums;
+               color: var(--primary-text-color); white-space: nowrap; }
+      .temps .arr { margin: 0 3px; color: var(--secondary-text-color); }
+      .temps .uom { color: var(--secondary-text-color); margin-left: 1px; }
+      .pw { flex: 0 0 auto; cursor: pointer; min-width: 42px; text-align: right;
+            color: var(--secondary-text-color); font-variant-numeric: tabular-nums;
+            white-space: nowrap; }
+      .winwrap { position: relative; display: inline-flex; flex: 0 0 auto; }
+      .win { --mdc-icon-size: 20px; cursor: pointer; }
+      .win.closed  { color: var(--success-color, #43a047); }
+      .win.some    { color: var(--warning-color, #ffa600); }
+      .win.open    { color: var(--error-color, #db4437); }
+      .win.unknown { color: var(--disabled-text-color, #9e9e9e); }
+      .batdot { display: none; position: absolute; right: -1px; bottom: -1px;
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--error-color, #db4437);
+        box-shadow: 0 0 0 1.5px var(--card-background-color, #fff); }
+      .fans { display: inline-flex; gap: 8px; flex: 0 0 auto; }
+      .rfan { border: none; background: transparent; padding: 0; cursor: pointer;
+              display: inline-flex; }
+      .rfan ha-icon { --mdc-icon-size: 20px; color: inherit; }
+      .rfan.on  { color: var(--success-color, #43a047); }
+      .rfan.on ha-icon { animation: acrc-spin 2s linear infinite; }
+      .rfan.off { color: var(--info-color, #039be5); }
+      @keyframes acrc-spin { to { transform: rotate(360deg); } }
+      @media (max-width: 380px) {
+        .room { gap: 6px; padding: 4px 8px; }
+        .pw { display: none; }
+      }
+    `;
+    return s;
+  }
+}
+
+
+class AcRoomsCardEditor extends HTMLElement {
+  setConfig(config) { this._config = config || {}; this._render(); }
+  set hass(hass) { this._hass = hass; this._render(); }
+  _render() {
+    if (this.innerHTML) return;
+    this.innerHTML =
+      '<div style="padding:8px 4px;font-size:14px;line-height:1.5;' +
+      'color:var(--primary-text-color)">' +
+      '<b>AC Rooms Card</b> se configura en YAML: cada pieza en <code>rooms</code> ' +
+      'acepta el mismo bloque que <code>ac-room-card</code>, para copiar y pegar.' +
+      '<pre style="font-size:12px;overflow:auto;background:var(--secondary-background-color,#f1f1f1);' +
+      'padding:8px;border-radius:6px">rooms:\n  - entity: climate.pieza\n    name: Pieza\n' +
+      '    power_entity: sensor.pieza_potencia\n    temp_entity: sensor.pieza_temp\n' +
+      '    window_entity: [binary_sensor.pieza_ventana]\n    fans: [fan.pieza]</pre>' +
+      'Opcional: <code>title</code> y <code>sort: active</code> (encendidas primero).' +
+      '</div>';
+  }
+}
+
+if (!customElements.get("ac-rooms-card-editor")) {
+  customElements.define("ac-rooms-card-editor", AcRoomsCardEditor);
+}
+
+if (!customElements.get("ac-rooms-card")) {
+  customElements.define("ac-rooms-card", AcRoomsCard);
+}
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "ac-rooms-card",
+  name: "AC Rooms Card",
+  description: "Vista compacta de varias piezas, una linea por cada una",
+  preview: false,
+});
 
 if (!customElements.get("ac-room-card")) {
   customElements.define("ac-room-card", AcRoomCard);

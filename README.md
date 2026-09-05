@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.15.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.16.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -34,6 +34,17 @@ runtime through `loadCardHelpers()` and draws around it, so you keep that card's
 behaviour, translations and updates.
 
 **No dependencies, no build step.** One `.js` file.
+
+---
+
+## Two cards in one file
+
+| Card | What it is |
+|---|---|
+| `custom:ac-room-card` | One room, full detail. Wraps your climate card. |
+| `custom:ac-rooms-card` | Several rooms, one compact line each. Built for phones. |
+
+Both ship in the same `.js`, so one install gives you both.
 
 ---
 
@@ -405,13 +416,60 @@ entity is missing. Check the entity IDs in the visual editor.
 
 ---
 
+## AC Rooms Card
+
+A compact list — one line per room — for a phone dashboard, where six full cards
+mean six screens of scrolling.
+
+```
+⏻  Bedroom      21.6 → 26.0°   340 W   🪟  🌀
+⏻  Kitchen      18.0 → 20.0°     5 W   🪟
+⏻  Office       23.1            0 W        🌀
+```
+
+```yaml
+type: custom:ac-rooms-card
+title: Air conditioning
+sort: active          # optional: running rooms first
+rooms:
+  - entity: climate.bedroom
+    name: Bedroom
+    power_entity: sensor.bedroom_ac_power
+    temp_entity: sensor.bedroom_temperature
+    window_entity: [binary_sensor.bedroom_window]
+    fans: [fan.bedroom_ceiling]
+  - entity: input_boolean.kids_ac
+    name: Kids room
+    modes:
+      - entity: input_boolean.kids_ac
+      - entity: input_boolean.kids_ac_heat
+```
+
+Each room takes **the same block as `ac-room-card`**, so you can copy a card's
+config straight in. Fields it uses: `entity`, `name`, `power_entity`,
+`temp_entity`, `window_entity` (with battery), `fans`, `modes`, `battery_warn`.
+
+| Element | Tap |
+|---|---|
+| Power button | Turns the room on/off |
+| Name or temperatures | More-info of the unit |
+| Power reading | More-info of the power sensor |
+| Window icon | More-info of the first open window |
+| Fan icons | Toggles that fan |
+
+Temperatures read **current → target**. Windows and batteries use the same
+green/orange/red logic as the full card. Below 380 px the power column hides
+itself to keep the line readable.
+
+`sort: active` puts running rooms on top; leave it out to keep your order.
+
 ## Development
 
 ```bash
 node test/smoke.js
 ```
 
-131 assertions, no browser: a minimal DOM shim exercises value formatting,
+155 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.
