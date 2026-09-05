@@ -40,6 +40,8 @@ const hass = {
     "sensor.caido":            { state: "unavailable", attributes: {} },
     "sensor.temp":             { state: "22.6000003814697", attributes: { unit_of_measurement: "\u00b0C" } },
     "input_number.mins":       { state: "60", attributes: { min: 0, max: 480, step: 30 } },
+    "input_boolean.frio":      { state: "off", attributes: {} },
+    "input_boolean.calor":     { state: "on",  attributes: {} },
     "timer.t_idle":            { state: "idle",   attributes: {} },
     "timer.t_run":             { state: "active", attributes: { finishes_at: new Date(Date.now() + 2530 * 1000).toISOString() } },
   },
@@ -198,6 +200,21 @@ c = mk({ entity: "climate.dorm", name: "Dormitorio", icon: "mdi:snowflake", powe
 ok("guarda el nombre en config", c._config.name === "Dormitorio", c._config.name);
 ok("guarda el icono en config",  c._config.icon === "mdi:snowflake", c._config.icon);
 
+console.log("\n--- caso 7c: selector de modo frio/calor");
+const MODES = [{ name: "Frio", entity: "input_boolean.frio", icon: "mdi:snowflake" },
+               { name: "Calor", entity: "input_boolean.calor", icon: "mdi:fire" }];
+c = mk({ entity: "input_boolean.frio", modes: MODES, power_entity: "sensor.pot" });
+ok("detecta que el modo activo es Calor", c._activeMode() === 1, c._activeMode());
+calls.length = 0;
+c._setMode(0);
+ok("cambiar a Frio apaga Calor primero", calls[0].srv === "turn_off" && calls[0].data.entity_id === "input_boolean.calor", calls[0]);
+ok("y despues prende Frio",              calls[1].srv === "turn_on"  && calls[1].data.entity_id === "input_boolean.frio", calls[1]);
+calls.length = 0;
+c._setMode(-1);
+ok("Apagado solo apaga, no prende nada", calls.length === 1 && calls[0].srv === "turn_off", calls);
+c = mk({ entity: "input_boolean.frio", modes: [{ name: "Frio", entity: "input_boolean.frio" }] });
+ok("sin ningun modo on, activo = -1", c._activeMode() === -1, c._activeMode());
+
 console.log("\n--- caso 8: editor visual, ida y vuelta de la config");
 const ED = DEFS["ac-room-card-editor"];
 ok("el editor esta registrado", !!ED, Object.keys(DEFS));
@@ -225,6 +242,15 @@ const back = ED.fromForm(cfgFull, flat);
 ok("reconstruye timer anidado", JSON.stringify(back.timer) === JSON.stringify(cfgFull.timer), back.timer);
 ok("PRESERVA base_card",        JSON.stringify(back.base_card) === JSON.stringify(cfgFull.base_card), back.base_card);
 ok("conserva el type",          back.type === "custom:ac-room-card", back.type);
+
+const cfgModes = { type: "custom:ac-room-card", entity: "input_boolean.frio", modes: MODES };
+const flatM = ED.toForm(cfgModes);
+ok("aplana el boolean de frio", flatM.mode_cold_entity === "input_boolean.frio", flatM);
+ok("aplana el boolean de calor", flatM.mode_heat_entity === "input_boolean.calor", flatM);
+const backM = ED.fromForm(cfgModes, flatM);
+ok("reconstruye modes con nombre e icono", JSON.stringify(backM.modes) === JSON.stringify(MODES), backM.modes);
+const soloFrio = ED.fromForm(cfgModes, { ...flatM, mode_heat_entity: "" });
+ok("quitar calor deja un solo modo", soloFrio.modes.length === 1 && soloFrio.modes[0].name === "Frio", soloFrio.modes);
 
 let roundtrip = ED.fromForm(cfgFull, flat);
 ok("nombre sobrevive el ida y vuelta", roundtrip.name === "Dormitorio", roundtrip.name);

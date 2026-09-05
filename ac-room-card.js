@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.8.0";
+const VERSION = "0.9.0";
 
 const T = {
   today: "Hoy",
@@ -20,6 +20,7 @@ const T = {
   cancel: "Cancelar",
   offIn: "Apaga en",
   min: "min",
+  off: "Apagado",
   unavailable: "no disponible",
 };
 
@@ -93,6 +94,10 @@ class AcRoomCard extends HTMLElement {
 
     const helpers = await window.loadCardHelpers();
 
+    // Con `modes` el propio card dibuja el selector, asi que no hace falta
+    // envolver nada salvo que se pida un base_card explicito.
+    const skipInner = !cfg.base_card && Array.isArray(cfg.modes) && cfg.modes.length > 0;
+
     // base_card permite envolver CUALQUIER card (custom:mini-climate,
     // custom:simple-thermostat, etc). Sin el, se usa el thermostat integrado
     // para entidades climate y un tile para el resto.
@@ -109,8 +114,10 @@ class AcRoomCard extends HTMLElement {
       if (cfg.features) innerCfg.features = cfg.features;
     }
 
-    this._inner = await helpers.createCardElement(innerCfg);
-    this._inner.hass = this._hass;
+    if (!skipInner) {
+      this._inner = await helpers.createCardElement(innerCfg);
+      this._inner.hass = this._hass;
+    }
 
     const card = document.createElement("ha-card");
     card.className = "root";
@@ -125,10 +132,31 @@ class AcRoomCard extends HTMLElement {
       card.appendChild(head);
     }
 
-    const innerWrap = document.createElement("div");
-    innerWrap.className = "inner";
-    innerWrap.appendChild(this._inner);
-    card.appendChild(innerWrap);
+    if (this._inner) {
+      const innerWrap = document.createElement("div");
+      innerWrap.className = "inner";
+      innerWrap.appendChild(this._inner);
+      card.appendChild(innerWrap);
+    }
+
+    if (Array.isArray(cfg.modes) && cfg.modes.length) {
+      const mr = document.createElement("div");
+      mr.className = "moderow";
+      const mk = (label, icon, idx) => {
+        const b = document.createElement("button");
+        b.className = "mode";
+        b.dataset.idx = String(idx);
+        b.innerHTML = (icon ? `<ha-icon icon="${icon}"></ha-icon>` : "") + `<span></span>`;
+        b.querySelector("span").textContent = label;
+        b.addEventListener("click", () => this._setMode(idx));
+        mr.appendChild(b);
+        return b;
+      };
+      this._modeBtns = [mk(cfg.labels.off, "mdi:power", -1)];
+      cfg.modes.forEach((m, i) => this._modeBtns.push(mk(m.name || m.entity, m.icon, i)));
+      card.appendChild(mr);
+      this._rows.modes = mr;
+    }
 
     const footer = document.createElement("div");
     footer.className = "footer";
@@ -163,7 +191,7 @@ class AcRoomCard extends HTMLElement {
     this.shadowRoot.appendChild(this._style());
     this.shadowRoot.appendChild(card);
 
-    this._stripInnerCard();
+    if (this._inner) this._stripInnerCard();
   }
 
   _addRow(parent, icon, label, withWindow) {
@@ -290,13 +318,52 @@ class AcRoomCard extends HTMLElement {
     }
 
     // Aviso opcional (por defecto apagado: el icono rojo ya lo dice)
-    const main = this._hass.states[cfg.entity];
-    const acOn = main && main.state !== "off" && main.state !== "unavailable" && main.state !== "unknown";
+    let acOn;
+    if (Array.isArray(cfg.modes) && cfg.modes.length) {
+      acOn = this._activeMode() >= 0;
+    } else {
+      const main = this._hass.states[cfg.entity];
+      acOn = !!main && main.state !== "off" && main.state !== "unavailable" && main.state !== "unknown";
+    }
     const show = !!cfg.show_warning && windowOpen && acOn;
     this._rows.warn.style.display = show ? "flex" : "none";
     if (show) this._rows.warn.querySelector("span").textContent = L.warn;
 
+    this._updateModes();
     this._updateTimer();
+  }
+
+  /* ---------- modos (frio / calor) ---------- */
+
+  _activeMode() {
+    const modes = this._config.modes || [];
+    for (let i = 0; i < modes.length; i++) {
+      const st = this._hass.states[modes[i].entity];
+      if (st && st.state === "on") return i;
+    }
+    return -1;
+  }
+
+  /* Apaga primero los otros y despues prende el elegido: si cada boolean
+     dispara una escena IR, el orden inverso dejaria el equipo apagado. */
+  _setMode(idx) {
+    const modes = this._config.modes || [];
+    modes.forEach((m, i) => {
+      if (i !== idx && this._hass.states[m.entity] && this._hass.states[m.entity].state === "on") {
+        this._hass.callService("input_boolean", "turn_off", { entity_id: m.entity });
+      }
+    });
+    if (idx >= 0 && modes[idx]) {
+      this._hass.callService("input_boolean", "turn_on", { entity_id: modes[idx].entity });
+    }
+  }
+
+  _updateModes() {
+    if (!this._modeBtns) return;
+    const active = this._activeMode();
+    this._modeBtns.forEach((b) => {
+      b.className = Number(b.dataset.idx) === active ? "mode on" : "mode";
+    });
   }
 
   /* ---------- timer ---------- */
@@ -445,6 +512,23 @@ class AcRoomCard extends HTMLElement {
       .row .win.closed  { color: var(--success-color, #43a047); }
       .row .win.open    { color: var(--error-color, #db4437); }
       .row .win.unknown { color: var(--disabled-text-color, #9e9e9e); }
+      .moderow {
+        display: flex; gap: 6px; padding: 10px 16px 4px 16px;
+      }
+      .moderow .mode {
+        flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+        font: inherit; font-size: 13px; cursor: pointer; padding: 6px 4px;
+        border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
+        background: transparent; color: var(--secondary-text-color);
+      }
+      .moderow .mode ha-icon { --mdc-icon-size: 18px; }
+      .moderow .mode:hover { background: var(--secondary-background-color, #f0f0f0); }
+      .moderow .mode.on {
+        border-color: var(--primary-color, #03a9f4);
+        color: var(--primary-color, #03a9f4);
+        background: color-mix(in srgb, var(--primary-color, #03a9f4) 12%, transparent);
+        font-weight: 500;
+      }
       .timerrow {
         display: flex; align-items: center; gap: 8px;
         padding: 8px 16px 12px 16px;
@@ -482,6 +566,8 @@ class AcRoomCard extends HTMLElement {
 const EDITOR_LABELS = {
   entity: "Equipo (climate, o input_boolean si es por IR)",
   name: "Nombre que se muestra arriba",
+  mode_cold_entity: "Boolean de FRIO (equipos sin entidad climate)",
+  mode_heat_entity: "Boolean de CALOR (opcional)",
   icon: "Icono del encabezado (opcional)",
   power_entity: "Potencia",
   temp_entity: "Temperatura de la pieza",
@@ -504,6 +590,10 @@ const EDITOR_SCHEMA = [
   { name: "", type: "grid", schema: [
     { name: "power_entity", selector: { entity: { domain: "sensor", device_class: "power" } } },
     { name: "temp_entity", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
+  ]},
+  { name: "", type: "grid", schema: [
+    { name: "mode_cold_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
+    { name: "mode_heat_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
   ]},
   { name: "window_entity", selector: { entity: { domain: "binary_sensor" } } },
   { name: "", type: "grid", schema: [
@@ -529,6 +619,9 @@ function toForm(config) {
                    "show_warning"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
+  const m = Array.isArray(c.modes) ? c.modes : [];
+  if (m[0] && m[0].entity) out.mode_cold_entity = m[0].entity;
+  if (m[1] && m[1].entity) out.mode_heat_entity = m[1].entity;
   if (t.entity) out.timer_entity = t.entity;
   if (t.minutes_entity) out.timer_minutes_entity = t.minutes_entity;
   if (t.button_entity) out.timer_button_entity = t.button_entity;
@@ -548,6 +641,18 @@ function fromForm(prev, data) {
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;
   }
+
+  // Reconstruye `modes` conservando nombre e icono si ya existian
+  const prevModes = Array.isArray((prev || {}).modes) ? prev.modes : [];
+  const modes = [];
+  if (d.mode_cold_entity) {
+    modes.push({ ...(prevModes[0] || { name: "Frio", icon: "mdi:snowflake" }), entity: d.mode_cold_entity });
+  }
+  if (d.mode_heat_entity) {
+    modes.push({ ...(prevModes[1] || { name: "Calor", icon: "mdi:fire" }), entity: d.mode_heat_entity });
+  }
+  if (modes.length) out.modes = modes;
+  else delete out.modes;
 
   if (d.timer_entity) {
     const t = { entity: d.timer_entity };

@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.8.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.9.0-blue.svg)
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
 le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
@@ -73,6 +73,7 @@ features:
 | `energy_month_entity` | string | no | Sensor de energia del mes. |
 | `window_entity` | string | no | `binary_sensor` de la ventana. `on` = abierta (rojo), `off` = cerrada (verde). Se dibuja en la misma linea de la potencia. |
 | `temp_entity` | string | no | Sensor de temperatura de la pieza. Se dibuja a la derecha del simbolo de ventana. |
+| `modes` | list | no | Selector de modo para equipos sin entidad `climate`. Ver abajo. |
 | `timer` | map | no | Temporizador de apagado integrado. Ver abajo. |
 | `show_warning` | bool | no | `false` por defecto. Si lo activas, agrega un aviso de texto cuando la ventana esta abierta *y* el aire andando. El icono rojo ya cubre el caso, por eso viene apagado. |
 | `base_card` | map | no | Config completa del card que va arriba. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
@@ -235,6 +236,41 @@ base_card:
 ```
 
 Si `base_card` no trae `entity`, hereda la de arriba.
+
+### Selector de modo (frio / calor)
+
+Para equipos por IR que no tienen entidad `climate` y se manejan con un
+`input_boolean` por modo, `modes` dibuja un selector **Apagado / Frio / Calor**
+y muestra cual esta activo:
+
+```yaml
+type: custom:ac-room-card
+name: Pieza
+entity: input_boolean.ac_pieza
+modes:
+  - name: Frio
+    entity: input_boolean.ac_pieza
+    icon: mdi:snowflake
+  - name: Calor
+    entity: input_boolean.ac_pieza_heat
+    icon: mdi:fire
+power_entity: sensor.ac_pieza_potencia
+```
+
+Con un solo modo en la lista, el selector queda como un Apagado / Encendido.
+
+Al elegir un modo, el card **apaga primero los otros y despues prende el
+elegido**. El orden importa: si cada boolean dispara una escena IR, hacerlo al
+reves dejaria el equipo apagado, porque el "off" del modo anterior llegaria
+despues del "on" del nuevo.
+
+Con `modes` y sin `base_card`, el card no envuelve nada: dibuja el encabezado,
+el selector, la linea de datos y el temporizador. Si igual quieres un card
+arriba, pon un `base_card`.
+
+> Cada boolean tiene que estar cableado a lo que realmente enciende el equipo
+> (una escena, un `remote.send_command`, lo que uses). El card cambia el
+> boolean; no sabe mandar IR por su cuenta.
 
 ### Sin entidad climate
 
