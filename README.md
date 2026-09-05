@@ -73,3 +73,12 @@ window_entity: binary_sensor.javi_ventana_contact
 ## Licencia
 
 MIT. Ver [LICENSE](LICENSE).
+
+## Tests
+
+```bash
+node test/smoke.js
+```
+
+Ejercita la logica de las filas (valores, unidades, entidades ausentes o
+`unavailable`, el aviso de ventana) con un shim minimo de DOM, sin navegador.
