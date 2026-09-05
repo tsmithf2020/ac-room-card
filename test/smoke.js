@@ -292,6 +292,29 @@ ok("el form recibe solo entity_id", JSON.stringify(flatF.fans) === JSON.stringif
 const backF = ED.fromForm(cfgFans, flatF);
 ok("conserva el objeto con nombre", backF.fans[0].name === "Techo", backF.fans);
 ok("y el que era string sigue string", backF.fans[1] === "fan.dos", backF.fans);
+ok("expone un campo de nombre por ventilador", flatF.fan_name_0 === "Techo" && flatF.fan_name_1 === "", flatF);
+
+// renombrar sin tocar la lista
+const renombrado = ED.fromForm(cfgFans, { ...flatF, fan_name_1: "Ventana" });
+ok("renombrar el segundo lo vuelve objeto", renombrado.fans[1].name === "Ventana", renombrado.fans);
+ok("y no pierde el icono del primero",      renombrado.fans[0].icon === "mdi:ceiling-fan", renombrado.fans);
+ok("no filtra fan_name_* a la config",      Object.keys(renombrado).every(k => !/^fan_name_/.test(k)), Object.keys(renombrado));
+
+// borrar el nombre lo devuelve a entity_id simple
+const sinNombre = ED.fromForm({ type:"custom:ac-room-card", entity:"climate.dorm", fans:[{entity:"fan.dos", name:"X"}] },
+                              { fans:["fan.dos"], fan_name_0: "" });
+ok("borrar el nombre deja el entity_id suelto", sinNombre.fans[0] === "fan.dos", sinNombre.fans);
+
+// quitar un ventilador no debe correr los nombres al de al lado
+const quitandoElPrimero = ED.fromForm(cfgFans, { ...flatF, fans: ["fan.dos"] });
+ok("al cambiar la lista los nombres siguen a su entidad",
+   quitandoElPrimero.fans[0] === "fan.dos", quitandoElPrimero.fans);
+
+const esq = ED.buildSchema({ fans: ["fan.uno", "fan.dos"] });
+ok("el esquema agrega los campos de nombre", JSON.stringify(esq).includes("fan_name_1"), "falta fan_name_1");
+const esqVacio = ED.buildSchema({});
+ok("sin ventiladores no agrega campos", !JSON.stringify(esqVacio).includes("fan_name_"), "sobran campos");
+
 const sinFans = ED.fromForm(cfgFans, { ...flatF, fans: [] });
 ok("lista vacia quita la clave", sinFans.fans === undefined, sinFans.fans);
 

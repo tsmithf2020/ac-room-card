@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.10.1";
+const VERSION = "0.11.0";
 
 const T = {
   today: "Hoy",
@@ -698,7 +698,31 @@ const EDITOR_LABELS = {
   show_warning: "Avisar por texto si la ventana esta abierta con el aire andando",
 };
 
-const EDITOR_SCHEMA = [
+function normFans(list) {
+  if (!list) return [];
+  return (Array.isArray(list) ? list : [list])
+    .map((x) => (typeof x === "string" ? { entity: x } : x))
+    .filter((x) => x && x.entity);
+}
+
+const fanIds = (list) => normFans(list).map((f) => f.entity);
+
+/* El esquema se arma en cada render porque los campos de nombre dependen de
+   cuantos ventiladores haya elegidos. */
+function buildSchema(config) {
+  const schema = BASE_SCHEMA.slice();
+  const fans = fanIds((config || {}).fans);
+  if (fans.length) {
+    schema.push({
+      name: "",
+      type: "grid",
+      schema: fans.map((_, i) => ({ name: `fan_name_${i}`, selector: { text: {} } })),
+    });
+  }
+  return schema;
+}
+
+const BASE_SCHEMA = [
   { name: "entity", required: true,
     selector: { entity: { domain: ["climate", "input_boolean", "switch"] } } },
   { name: "", type: "grid", schema: [
@@ -738,8 +762,12 @@ function toForm(config) {
                    "show_warning"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
-  if (Array.isArray(c.fans) && c.fans.length) {
-    out.fans = c.fans.map((f) => (typeof f === "string" ? f : f.entity)).filter(Boolean);
+  const fans = normFans(c.fans);
+  if (fans.length) {
+    out.fans = fans.map((f) => f.entity);
+    fans.forEach((f, i) => {
+      out[`fan_name_${i}`] = f.name || "";
+    });
   }
   const m = Array.isArray(c.modes) ? c.modes : [];
   if (m[0] && m[0].entity) out.mode_cold_entity = m[0].entity;
@@ -764,17 +792,31 @@ function fromForm(prev, data) {
     else out[k] = v;
   }
 
-  // Ventiladores: el form da una lista de entity_id. Conserva el objeto
-  // completo (name / icon) de los que ya estaban configurados asi.
+  // Ventiladores. Los nombres vienen en campos fan_name_<i>, que son por
+  // posicion; si la lista misma acaba de cambiar esos indices ya no calzan,
+  // asi que en ese caso se conservan los nombres buscando por entidad y el
+  // siguiente render vuelve a poblar el formulario correctamente.
+  const prevFans = normFans((prev || {}).fans);
   if (Array.isArray(d.fans) && d.fans.length) {
-    const prevFans = Array.isArray((prev || {}).fans) ? prev.fans : [];
-    out.fans = d.fans.map((id) => {
-      const old = prevFans.find((f) => (typeof f === "string" ? f : f.entity) === id);
-      return old && typeof old !== "string" ? old : id;
+    const listaCambio =
+      prevFans.length !== d.fans.length ||
+      prevFans.some((f, i) => f.entity !== d.fans[i]);
+    out.fans = d.fans.map((id, i) => {
+      const old = prevFans.find((f) => f.entity === id) || {};
+      const nombre = listaCambio
+        ? old.name
+        : String(d[`fan_name_${i}`] === undefined ? old.name || "" : d[`fan_name_${i}`]).trim();
+      const obj = { entity: id };
+      if (nombre) obj.name = nombre;
+      if (old.icon) obj.icon = old.icon;
+      // Sin nombre ni icono propios, se guarda como simple entity_id
+      return obj.name || obj.icon ? obj : id;
     });
   } else {
     delete out.fans;
   }
+  // Los fan_name_* son del formulario, nunca de la config del card
+  for (const k of Object.keys(out)) if (/^fan_name_\d+$/.test(k)) delete out[k];
 
   // Reconstruye `modes` conservando nombre e icono si ya existian
   const prevModes = Array.isArray((prev || {}).modes) ? prev.modes : [];
@@ -802,6 +844,7 @@ function fromForm(prev, data) {
 
 class AcRoomCardEditor extends HTMLElement {
   static get toForm() { return toForm; }
+  static get buildSchema() { return buildSchema; }
   static get fromForm() { return fromForm; }
 
   setConfig(config) {
@@ -818,7 +861,16 @@ class AcRoomCardEditor extends HTMLElement {
     if (!this._config || !this._hass) return;
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = (schema) => EDITOR_LABELS[schema.name] || schema.name;
+      this._form.computeLabel = (schema) => {
+        const m = /^fan_name_(\d+)$/.exec(schema.name || "");
+        if (m) {
+          const id = fanIds(this._config.fans)[Number(m[1])];
+          const st = id && this._hass && this._hass.states[id];
+          const base = (st && st.attributes.friendly_name) || id || "";
+          return `Nombre de ${base}`;
+        }
+        return EDITOR_LABELS[schema.name] || schema.name;
+      };
       this._form.addEventListener("value-changed", (ev) => {
         const cfg = fromForm(this._config, ev.detail.value);
         this._config = cfg;
@@ -833,7 +885,7 @@ class AcRoomCardEditor extends HTMLElement {
       this.appendChild(this._note);
     }
     this._form.hass = this._hass;
-    this._form.schema = EDITOR_SCHEMA;
+    this._form.schema = buildSchema(this._config);
     this._form.data = toForm(this._config);
     this._note.textContent = this._config.base_card
       ? `El card de arriba (${this._config.base_card.type}) se conserva; se edita en YAML.`

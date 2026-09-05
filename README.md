@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.10.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.11.0-blue.svg)
 
 Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
 le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
@@ -256,6 +256,10 @@ fans:
 misma linea. **Dos o mas** se dibujan en su propia fila, debajo del temporizador.
 El boton es el mismo en los dos casos: compacto, solo el icono. El nombre va en
 el tooltip, que es lo que distingue un ventilador de otro.
+
+**Los nombres se editan desde el editor visual**: al elegir los ventiladores
+aparece un campo de texto por cada uno. Si lo dejas vacio se usa el
+`friendly_name` de la entidad. En YAML es el `name` de cada objeto.
 
 Se prenden y apagan tocandolos. **Verde encendido, azul apagado** (con el icono
 girando mientras esta en marcha). Acepta entidades `fan`, `switch` y tambien
