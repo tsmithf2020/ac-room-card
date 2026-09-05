@@ -749,6 +749,22 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
                                  head.querySelector(".real").textContent === "Real",
      [head.querySelector(".tgt").textContent, head.querySelector(".act").textContent, head.querySelector(".real").textContent]);
   ok("y el rayo sobre la potencia", /mdi:flash/.test(head.innerHTML), head.innerHTML);
+  // el encabezado debe rotular TODAS las columnas activas, en el mismo orden
+  const cTodas = mkR({ columns:["temps","power","timer","window","fans"],
+    rooms:[{ entity:"climate.conFan", name:"P", power_entity:"sensor.pot" }]});
+  const hTodas = cTodas._filas[0].fila.parentNode.children[0];
+  ok("encabezado: icono de temporizador", /mdi:timer-outline/.test(hTodas.innerHTML), hTodas.innerHTML);
+  ok("encabezado: icono de ventana",      /mdi:window-closed-variant/.test(hTodas.innerHTML), hTodas.innerHTML);
+  ok("encabezado: icono de ventiladores", /mdi:fan/.test(hTodas.innerHTML), hTodas.innerHTML);
+  // clases exactas: buscar "pw" a secas calza dentro de class="pwrsp"
+const orden = ['class="temps"','class="pw"','class="tmr"','class="winwrap"','class="fans"']
+  .map(c=>hTodas.innerHTML.indexOf(c));
+  ok("encabezado en el mismo orden que la fila",
+     orden.every((v,k)=> k===0 || v>orden[k-1]), orden);
+  const cSolo = mkR({ columns:["window"], rooms:[{ entity:"climate.conFan", name:"P" }]});
+  const hSolo = cSolo._filas[0].fila.parentNode.children[0];
+  ok("solo ventana: hay encabezado igual", hSolo.className==="room head", hSolo.className);
+  ok("solo ventana: sin etiquetas de temperatura", !/Target/.test(hSolo.innerHTML), hSolo.innerHTML);
   const cSinPw = mkR({ columns: ["temps"], rooms: [{ entity: "climate.conFan", name: "P" }] });
   const head2 = cSinPw._filas[0].fila.parentNode.children[0];
   ok("sin columna de potencia, no hay rayo", !/mdi:flash/.test(head2.innerHTML), head2.innerHTML);

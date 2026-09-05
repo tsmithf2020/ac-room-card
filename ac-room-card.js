@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.27.0";
+const VERSION = "0.27.1";
 
 const T = {
   today: "Hoy",
@@ -1439,19 +1439,27 @@ class AcRoomsCard extends HTMLElement {
 
     // Las etiquetas van una vez como encabezado de columna. Repetirlas en
     // cada una de las filas seria ruido puro.
+    /* El encabezado tiene que llevar los MISMOS huecos que las filas y en el
+       mismo orden, o las columnas dejan de calzar. */
     const cols0 = this._cols();
-    if (cols0.has("temps")) {
+    if (["temps", "power", "timer", "window", "fans"].some((k) => cols0.has(k))) {
       const L0 = this._config.labels;
       const head = document.createElement("div");
       head.className = "room head";
       head.innerHTML =
         `<span class="pwrsp"></span><span class="rname"></span>` +
-        `<span class="temps"><span class="tgt"></span>` +
-        `<span class="act"></span><span class="real"></span></span>` +
-        (cols0.has("power") ? `<span class="pw"><ha-icon icon="mdi:flash"></ha-icon></span>` : "");
-      head.querySelector(".tgt").textContent = L0.target;
-      head.querySelector(".act").textContent = L0.actual;
-      head.querySelector(".real").textContent = L0.real;
+        (cols0.has("temps")
+          ? `<span class="temps"><span class="tgt"></span>` +
+            `<span class="act"></span><span class="real"></span></span>` : "") +
+        (cols0.has("power")  ? `<span class="pw"><ha-icon icon="mdi:flash"></ha-icon></span>` : "") +
+        (cols0.has("timer")  ? `<span class="tmr"><ha-icon icon="mdi:timer-outline"></ha-icon></span>` : "") +
+        (cols0.has("window") ? `<span class="winwrap"><ha-icon icon="mdi:window-closed-variant"></ha-icon></span>` : "") +
+        (cols0.has("fans")   ? `<span class="fans"><ha-icon icon="mdi:fan"></ha-icon></span>` : "");
+      if (cols0.has("temps")) {
+        head.querySelector(".tgt").textContent = L0.target;
+        head.querySelector(".act").textContent = L0.actual;
+        head.querySelector(".real").textContent = L0.real;
+      }
       cont.appendChild(head);
     }
 
@@ -1670,7 +1678,11 @@ class AcRoomsCard extends HTMLElement {
       .head .temps > span { overflow: hidden; text-overflow: clip; }
       .head .temps > span, .head .pw { color: inherit; font-weight: 500; }
       .head .pw { display: inline-flex; justify-content: flex-end; align-items: center; }
-      .head .pw ha-icon { --mdc-icon-size: 14px; }
+      .head .tmr, .head .winwrap, .head .fans {
+        display: inline-flex; align-items: center; justify-content: flex-start;
+        color: inherit; border: none; background: none; padding: 0;
+      }
+      .head ha-icon { --mdc-icon-size: 14px; color: inherit; }
       .head .pwrsp { flex: 0 0 auto; width: 42px; }
       .head .rname { min-width: 72px; }
       .room.head + .room { border-top: 1px solid var(--divider-color, #e0e0e0); }

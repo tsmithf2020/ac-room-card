@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.27.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.27.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -541,8 +541,8 @@ The last two rarely agree — the unit measures inside its own casing, often a
 couple of degrees off from the middle of the room. Showing them side by side is
 the point. Rename them with `labels: {target, actual, real}`.
 
-The labels are drawn **once**, as a column header — with a bolt over the power
-column. Repeating them on every row would be noise.
+The labels are drawn **once**, as a column header — with a small icon over the
+power, timer, window and fan columns. Repeating them on every row would be noise.
 
 On narrow screens the columns tighten instead of dropping the power reading:
 on a phone, what the unit is drawing right now is one of the things you most
@@ -578,7 +578,7 @@ you are aiming at a button.
 ## Development
 
 ```bash
-node test/smoke.js      # 221 assertions
+node test/smoke.js      # 227 assertions
 node test/discover.js   # 20 more, for discovery and the rooms editor
 ```
 
