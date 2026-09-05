@@ -33,6 +33,7 @@ const hass = {
     "sensor.mes":              { state: "12.34", attributes: { unit_of_measurement: "kWh" } },
     "binary_sensor.ventana":   { state: "on",    attributes: {} },
     "sensor.caido":            { state: "unavailable", attributes: {} },
+    "sensor.temp":             { state: "22.6000003814697", attributes: { unit_of_measurement: "\u00b0C" } },
   },
 };
 
@@ -71,6 +72,22 @@ ok("tooltip dice Abierta",          win().getAttribute("title") === "Ventana: Ab
 ok("aviso apagado por defecto",     c._rows.warn.style.display === "none", c._rows.warn.style.display);
 ok("NO se dibuja la etiqueta Potencia", !/class="label"/.test(c._rows.power.innerHTML), c._rows.power.innerHTML);
 ok("fila principal marcada .main",  c._rows.power.className === "row main", c._rows.power.className);
+
+console.log("\n--- caso 1e: temperatura a la derecha de la ventana");
+c = mk({ entity: "climate.dorm", power_entity: "sensor.pot",
+  window_entity: "binary_sensor.ventana", temp_entity: "sensor.temp" });
+ok("temp redondeada a 1 decimal", c._rows.power.querySelector(".temp").textContent === "22.6 \u00b0C", c._rows.power.querySelector(".temp").textContent);
+ok("termometro visible",          c._rows.power.querySelector(".tempicon").style.display === "", c._rows.power.querySelector(".tempicon").style.display);
+ok("temp va DESPUES de la ventana", c._rows.power.innerHTML.indexOf("tempicon") > c._rows.power.innerHTML.indexOf('class="win"'), c._rows.power.innerHTML);
+
+console.log("\n--- caso 1f: sin temp_entity el termometro se oculta");
+c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });
+ok("termometro oculto", c._rows.power.querySelector(".tempicon").style.display === "none", c._rows.power.querySelector(".tempicon").style.display);
+ok("valor de temp oculto", c._rows.power.querySelector(".temp").style.display === "none", c._rows.power.querySelector(".temp").style.display);
+
+console.log("\n--- caso 1g: solo temperatura, sin potencia ni ventana");
+c = mk({ entity: "climate.dorm", temp_entity: "sensor.temp" });
+ok("fila visible solo con temp", c._rows.power.style.display === "", c._rows.power.style.display);
 
 console.log("\n--- caso 1b: ventana cerrada -> verde");
 hass.states["binary_sensor.ventana"].state = "off";

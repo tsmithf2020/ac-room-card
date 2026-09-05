@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 const T = {
   today: "Hoy",
@@ -139,7 +139,11 @@ class AcRoomCard extends HTMLElement {
       `<ha-icon icon="${icon}"></ha-icon>` +
       (label === null ? "" : `<span class="label">${label}</span>`) +
       `<span class="value"></span>` +
-      (withWindow ? `<ha-icon class="win"></ha-icon>` : "");
+      (withWindow
+        ? `<ha-icon class="win"></ha-icon>` +
+          `<ha-icon class="tempicon" icon="mdi:thermometer"></ha-icon>` +
+          `<span class="temp"></span>`
+        : "");
     parent.appendChild(row);
     return row;
   }
@@ -180,8 +184,12 @@ class AcRoomCard extends HTMLElement {
     if (typeof this._hass.formatEntityState === "function") {
       text = this._hass.formatEntityState(st);
     } else {
+      const n = Number(st.state);
+      let v = st.state;
+      // Sin formatEntityState, un sensor como 22.6000003814697 se veria entero.
+      if (!Number.isNaN(n) && /\.\d{3,}/.test(st.state)) v = n.toFixed(1);
       const u = st.attributes.unit_of_measurement;
-      text = u ? `${st.state} ${u}` : st.state;
+      text = u ? `${v} ${u}` : v;
     }
     return { text, missing: false, state: st };
   }
@@ -211,8 +219,21 @@ class AcRoomCard extends HTMLElement {
       }
     }
 
+    // Temperatura de la pieza, a la derecha del simbolo de ventana
+    const tIcon = this._rows.power.querySelector(".tempicon");
+    const tVal = this._rows.power.querySelector(".temp");
+    const t = this._fmt(cfg.temp_entity);
+    if (!t) {
+      tIcon.style.display = "none";
+      tVal.style.display = "none";
+    } else {
+      tIcon.style.display = "";
+      tVal.style.display = "";
+      tVal.textContent = t.text;
+    }
+
     const p = this._fmt(cfg.power_entity);
-    if (!p && !cfg.window_entity) {
+    if (!p && !cfg.window_entity && !cfg.temp_entity) {
       this._rows.power.style.display = "none";
     } else {
       this._rows.power.style.display = "";
@@ -266,6 +287,9 @@ class AcRoomCard extends HTMLElement {
       .row .label { color: var(--secondary-text-color); flex: 0 0 auto; }
       .row .value { margin-left: auto; text-align: right; font-weight: 500; }
       .row.main .value { margin-left: 0; }
+      .row .tempicon { margin-left: 14px; --mdc-icon-size: 20px; flex: 0 0 auto;
+        color: var(--state-icon-color, var(--paper-item-icon-color, #44739e)); }
+      .row .temp { margin-left: 4px; font-weight: 500; }
       .row .win { margin-left: 10px; --mdc-icon-size: 20px; flex: 0 0 auto; }
       .row .win.closed  { color: var(--success-color, #43a047); }
       .row .win.open    { color: var(--error-color, #db4437); }
