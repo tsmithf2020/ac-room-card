@@ -294,9 +294,25 @@ console.log("\n--- caso 7g: base_card_style se inyecta en el shadow del card env
   c._stripInnerCard();
   ok("crea el <style> dentro del shadow", !!root._injected, root._injected);
   ok("con el CSS pedido", root._injected.textContent === "mc-temperature{color:red}", root._injected.textContent);
+  ok("lo marca con data-acrc", root._injected._attrs["data-acrc"] === "", root._injected._attrs);
   const antes = root._injected;
   c._injectInnerStyle();
   ok("no duplica el <style> al refrescar", root._injected === antes, "se creo otro");
+
+  // mapa selector -> css, para un shadow root anidado
+  const nested = makeEl("nestedRoot");
+  const hijo = makeEl("mc-temperature");
+  hijo.shadowRoot = { querySelector: () => nested._st || null, appendChild: (x) => { nested._st = x; return x; } };
+  const c3 = new CARD();
+  c3.setConfig({ entity: "climate.dorm", base_card_style: { "": "a{}", "mc-temperature": ".state__value{}" } });
+  c3._hass = hass;
+  const raiz = { _st: null };
+  c3._inner = { shadowRoot: {
+    querySelector: (sel) => (sel === "mc-temperature" ? hijo : (sel.startsWith("style") ? raiz._st : makeEl("x"))),
+    appendChild: (x) => { raiz._st = x; return x; } } };
+  c3._injectInnerStyle();
+  ok("inyecta en el shadow anidado", nested._st && nested._st.textContent === ".state__value{}", nested._st);
+  ok("y tambien en el de arriba",    raiz._st && raiz._st.textContent === "a{}", raiz._st);
 
   const c2 = new CARD(); c2.setConfig({ entity: "climate.dorm" }); c2._hass = hass;
   const root2 = makeEl("root");

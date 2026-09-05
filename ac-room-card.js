@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.13.0";
+const VERSION = "0.14.0";
 
 const T = {
   today: "Hoy",
@@ -259,19 +259,33 @@ class AcRoomCard extends HTMLElement {
     this._injectInnerStyle();
   }
 
-  /* base_card_style: CSS que se inyecta DENTRO del shadow root del card
-     envuelto. Sin esto no hay forma de tocar su interior desde afuera. */
-  _injectInnerStyle() {
-    const css = this._config.base_card_style;
+  /* base_card_style: CSS inyectado DENTRO del shadow root del card envuelto.
+     Acepta un string, o un mapa selector -> css para llegar a shadow roots
+     anidados (por ejemplo mc-temperature, que tiene el suyo propio). */
+  _injectInnerStyle(tries = 0) {
+    const cfg = this._config.base_card_style;
     const root = this._inner && this._inner.shadowRoot;
-    if (!css || !root) return;
-    let el = root.querySelector("style[data-acrc]");
-    if (!el) {
-      el = document.createElement("style");
-      el.setAttribute("data-acrc", "");
-      root.appendChild(el);
+    if (!cfg || !root) return;
+    const mapa = typeof cfg === "string" ? { "": cfg } : cfg;
+    let faltan = false;
+    for (const [sel, css] of Object.entries(mapa)) {
+      let destino = root;
+      if (sel) {
+        const el = root.querySelector(sel);
+        // Los elementos anidados montan despues; se reintenta.
+        if (!el || !el.shadowRoot) { faltan = true; continue; }
+        destino = el.shadowRoot;
+      }
+      const marca = `style[data-acrc="${sel}"]`;
+      let st = destino.querySelector(marca);
+      if (!st) {
+        st = document.createElement("style");
+        st.setAttribute("data-acrc", sel);
+        destino.appendChild(st);
+      }
+      if (st.textContent !== css) st.textContent = css;
     }
-    if (el.textContent !== css) el.textContent = css;
+    if (faltan && tries < 15) setTimeout(() => this._injectInnerStyle(tries + 1), 100);
   }
 
   _renderError(err) {
@@ -707,7 +721,11 @@ class AcRoomCard extends HTMLElement {
         font: inherit; cursor: pointer;
         border: none; background: transparent; padding: 0;
       }
-      .fan ha-icon { --mdc-icon-size: 20px; }
+      /* La regla .row ha-icon fija el color de TODOS los iconos de la fila,
+         incluido el del ventilador, y le ganaba a la herencia de .fan.on y
+         .fan.off: el icono nunca cambiaba de color. inherit devuelve el mando
+         al boton. */
+      .fan ha-icon { --mdc-icon-size: 20px; color: inherit; }
       .fan.on  { color: var(--success-color, #43a047); }
       .fan.on ha-icon { animation: acrc-spin 2s linear infinite; }
       .fan.off { color: var(--info-color, #039be5); }
