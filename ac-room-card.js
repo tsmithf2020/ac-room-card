@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.21.0";
+const VERSION = "0.22.0";
 
 const T = {
   today: "Hoy",
@@ -252,14 +252,21 @@ class AcRoomCard extends HTMLElement {
 
     if (this._fanModeSupported()) this._buildFanMode();
 
+    /* auto: uno va en la linea, dos o mas en fila propia.
+       inline / row fuerzan una u otra. */
     const fans = this._fanList();
-    if (fans.length === 1) {
-      // Uno solo: va pegado a potencia / ventana / temperatura
+    const modo = cfg.fans_position || "auto";
+    const enLinea = fans.length > 0 &&
+      (modo === "inline" || (modo === "auto" && fans.length === 1));
+    this._fansInline = enLinea;
+    if (enLinea) {
       const slot = this._rows.power.querySelector(".fanslot");
-      const b = this._makeFanBtn(fans[0]);
-      slot.appendChild(b);
-      this._fanBtns = [b];
-    } else if (fans.length > 1) {
+      this._fanBtns = fans.map((f) => {
+        const b = this._makeFanBtn(f);
+        slot.appendChild(b);
+        return b;
+      });
+    } else if (fans.length) {
       this._fanBtns = [];  // la fila va despues del temporizador
     }
 
@@ -279,7 +286,7 @@ class AcRoomCard extends HTMLElement {
       t.querySelector(".go").addEventListener("click", () => this._go());
     }
 
-    if (fans.length > 1) {
+    if (fans.length && !enLinea) {
       const fr = document.createElement("div");
       fr.className = "fanrow";
       for (const f of fans) {
@@ -816,7 +823,7 @@ class AcRoomCard extends HTMLElement {
         padding: 2px 4px;
       }
       .fanmode.off { opacity: .55; }
-      .row .fanslot { margin-left: 12px; display: inline-flex; }
+      .row .fanslot { margin-left: 12px; display: inline-flex; gap: 10px; }
       /* Sin marco ni fondo: al lado del rayo y del termometro, que son
          iconos pelados, un boton encajonado desentona. */
       .fan {
@@ -897,6 +904,7 @@ const EDITOR_LABELS = {
   battery_warn: "Avisar pila baja bajo (%)",
   fans: "Ventiladores (uno va en la linea; dos o mas, en su propia fila)",
   fan_mode: "Mostrar la velocidad del ventilador del equipo",
+  fans_position: "Donde van los ventiladores",
   mode_cold_entity: "Boolean de FRIO (equipos sin entidad climate)",
   mode_heat_entity: "Boolean de CALOR (opcional)",
   icon: "Icono del encabezado (opcional)",
@@ -952,6 +960,10 @@ const BASE_SCHEMA = [
   ]},
   { name: "window_entity", selector: { entity: { domain: "binary_sensor", multiple: true } } },
   { name: "fans", selector: { entity: { domain: ["fan", "switch", "light"], multiple: true } } },
+  { name: "fans_position", selector: { select: { mode: "dropdown", options: [
+      { value: "auto", label: "Automatico (uno en la linea, varios en fila propia)" },
+      { value: "inline", label: "Siempre en la linea" },
+      { value: "row", label: "Siempre en fila propia" }] } } },
   { name: "", type: "grid", schema: [
     { name: "energy_today_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
     { name: "energy_month_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
@@ -976,7 +988,7 @@ function toForm(config) {
   const out = {};
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
                    "energy_today_entity", "energy_month_entity",
-                   "battery_warn", "fan_mode", "show_warning"]) {
+                   "battery_warn", "fan_mode", "fans_position", "show_warning"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
   const wins = normFans(c.window_entity);
@@ -1005,7 +1017,7 @@ function fromForm(prev, data) {
 
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
                    "energy_today_entity", "energy_month_entity",
-                   "battery_warn", "fan_mode", "show_warning"]) {
+                   "battery_warn", "fan_mode", "fans_position", "show_warning"]) {
     const v = d[k];
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;

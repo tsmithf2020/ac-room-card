@@ -337,6 +337,32 @@ c = mkFM({ entity: "climate.conFan", fan_mode: true, fan_mode_names: { auto: "Au
 ok("acepta nombres propios", c._fanModeEl.querySelector("select").children[2].textContent === "Automatico",
    c._fanModeEl.querySelector("select").children[2].textContent);
 
+console.log("\n--- caso 7k: donde van los ventiladores");
+{
+  const build = (cfg) => {
+    const c = new CARD(); c.setConfig(cfg); c._hass = hass;
+    const f = makeEl("div");
+    c._rows = { power: c._addRow(f, "mdi:flash", null, true), energy: c._addRow(f, "mdi:x", "Hoy"), warn: makeEl("div") };
+    const fans = c._fanList();
+    const modo = c._config.fans_position || "auto";
+    const enLinea = fans.length > 0 && (modo === "inline" || (modo === "auto" && fans.length === 1));
+    c._fansInline = enLinea;
+    c._fanBtns = fans.map((x) => c._makeFanBtn(x));
+    return { c, enLinea, n: fans.length };
+  };
+  let r = build({ entity: "climate.dorm", fans: ["fan.uno"] });
+  ok("auto con uno -> en la linea", r.enLinea === true, r.enLinea);
+  r = build({ entity: "climate.dorm", fans: ["fan.uno", "fan.dos"] });
+  ok("auto con dos -> fila propia", r.enLinea === false, r.enLinea);
+  r = build({ entity: "climate.dorm", fans: ["fan.uno", "fan.dos"], fans_position: "inline" });
+  ok("inline con dos -> en la linea", r.enLinea === true, r.enLinea);
+  ok("y se crean los dos botones",   r.c._fanBtns.length === 2, r.c._fanBtns.length);
+  r = build({ entity: "climate.dorm", fans: ["fan.uno"], fans_position: "row" });
+  ok("row con uno -> fila propia",   r.enLinea === false, r.enLinea);
+  r = build({ entity: "climate.dorm", fans_position: "inline" });
+  ok("sin ventiladores no hay linea ni fila", r.enLinea === false, r.enLinea);
+}
+
 console.log("\n--- caso 7e: more-info al tocar");
 c = mkF({ entity: "climate.dorm", power_entity: "sensor.pot", window_entity: "binary_sensor.ventana", temp_entity: "sensor.temp" });
 let fired = null;
