@@ -2,8 +2,11 @@
 function makeEl(tag) {
   const el = {
     tag, className: "", innerHTML: "", textContent: "",
-    style: {}, children: [], _q: {}, _attrs: {}, dataset: {},
-    appendChild(c) { this.children.push(c); return c; },
+    style: { _vars: {}, setProperty(k, v) { this._vars[k] = v; },
+             getPropertyValue(k) { return this._vars[k]; } },
+    children: [], _q: {}, _attrs: {}, dataset: {},
+    remove() { this._removed = true; },
+    appendChild(c) { this.children.push(c); if (c) c.parentNode = this; return c; },
     setAttribute(k, v) { this._attrs[k] = v; },
     getAttribute(k) { return this._attrs[k]; },
     // El shim devolvia un stub para CUALQUIER selector, existiera o no en el
@@ -33,7 +36,7 @@ function makeEl(tag) {
   return el;
 }
 global.HTMLElement = class { attachShadow() { return (this.shadowRoot = makeEl("root")); } };
-global.document = { createElement: makeEl };
+global.document = { createElement: makeEl, addEventListener() {}, removeEventListener() {} };
 let CARD = null;
 const DEFS = {};
 global.customElements = { get: () => undefined, define: (n, c) => { DEFS[n] = c; if (n === "ac-room-card") CARD = c; } };
@@ -498,7 +501,7 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   ok("ventana naranja si va 1/2", f0.querySelector(".win").className === "win some", f0.querySelector(".win").className);
   ok("climate encendido -> boton on", f0.querySelector(".pwr").className === "pwr on", f0.querySelector(".pwr").className);
   ok("pieza IR con calor on tambien marca on", f1.querySelector(".pwr").className === "pwr on", f1.querySelector(".pwr").className);
-  ok("sin ventanas se oculta el icono", f1.querySelector(".winwrap").style.display === "none", f1.querySelector(".winwrap").style.display);
+  ok("sin ventanas la columna se reserva igual", f1.querySelector(".winwrap").style.visibility === "hidden", f1.querySelector(".winwrap").style.visibility);
 
   calls.length = 0;
   f0.querySelector(".pwr")._ev.click({ stopPropagation() {} });
@@ -515,8 +518,10 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
 
   let ev = null;
   c9.dispatchEvent = (e) => { ev = e; return true; };
-  f0.querySelector(".rname")._ev.click();
-  ok("tocar el nombre abre mas-info de la pieza", ev && ev.detail.entityId === "climate.conFan", ev && ev.detail);
+  const c9mi = mkR({ popup: false, rooms: [{ entity: "climate.conFan", name: "Pieza" }] });
+  c9mi.dispatchEvent = (e) => { ev = e; return true; };
+  c9mi._filas[0].fila.querySelector(".rname")._ev.click();
+  ok("con popup:false el nombre abre mas-info", ev && ev.detail.entityId === "climate.conFan", ev && ev.detail);
 
   // sort: active pone las encendidas primero
   hass.states["climate.conFan"].state = "off";
@@ -543,9 +548,9 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   const t2 = c11._filas[2].fila.querySelector(".tmr");
   ok("corriendo muestra la cuenta", /^\d+:\d\d$/.test(t0.querySelector(".tleft").textContent), t0.querySelector(".tleft").textContent);
   ok("corriendo se marca .on",      t0.className === "tmr on", t0.className);
-  ok("parada muestra solo el icono", t1.querySelector(".tleft").textContent === "" && t1.style.display === "", [t1.className, t1.style.display]);
+  ok("parada muestra solo el icono", t1.querySelector(".tleft").textContent === "" && t1.style.visibility === "", [t1.className, t1.style.visibility]);
   ok("el tooltip de la parada dice los minutos", /60 min/.test(t1.title), t1.title);
-  ok("sin timer configurado se oculta", t2.style.display === "none", t2.style.display);
+  ok("sin timer configurado la columna se reserva", t2.style.visibility === "hidden", t2.style.visibility);
 
   calls.length = 0;
   t0._ev.click({ stopPropagation() {} });
@@ -558,14 +563,45 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   const c12 = mkR({ rooms: [{ entity: "climate.conFan", name: "Apagada",
     timer: { entity: "timer.t_idle", minutes_entity: "input_number.mins" } }] });
   ok("apagada y sin contar, el timer se esconde",
-     c12._filas[0].fila.querySelector(".tmr").style.display === "none",
-     c12._filas[0].fila.querySelector(".tmr").style.display);
+     c12._filas[0].fila.querySelector(".tmr").style.visibility === "hidden",
+     c12._filas[0].fila.querySelector(".tmr").style.visibility);
   c12._tick(false);
   hass.states["climate.conFan"].state = "cool";
   c11._tick(false);
 
+  console.log("\n  -- columnas alineadas y popup --");
+  const c13 = mkR({ rooms: [
+    { entity: "climate.conFan", name: "Una",  fans: ["fan.uno"] },
+    { entity: "climate.conFan", name: "Tres", fans: ["fan.uno", "fan.dos", "fan.uno"] },
+  ]});
+  const cont13 = c13._filas[0].fila.parentNode;
+  ok("las dos filas comparten contenedor", cont13 === c13._filas[1].fila.parentNode, "no lo comparten");
+  ok("--acrc-fans se fija con el maximo (3)",
+     cont13.style.getPropertyValue("--acrc-fans") === "3",
+     cont13.style.getPropertyValue("--acrc-fans"));
+  const c13b = mkR({ rooms: [{ entity: "climate.conFan", name: "Sin fans" }] });
+  ok("sin ventiladores el minimo es 1",
+     c13b._filas[0].fila.parentNode.style.getPropertyValue("--acrc-fans") === "1",
+     c13b._filas[0].fila.parentNode.style.getPropertyValue("--acrc-fans"));
+
+  const c14 = mkR({ rooms: [{ entity: "climate.conFan", name: "Pieza" }] });
+  let creado = null;
+  global.window.loadCardHelpers = async () => ({ createCardElement: async (cfg) => { creado = cfg; return makeEl("card"); } });
+  return (async () => {
+    await c14._openPopup(c14._config.rooms[0]);
+    ok("el popup crea un ac-room-card", creado && creado.type === "custom:ac-room-card", creado);
+    ok("con la config de la pieza",     creado.entity === "climate.conFan" && creado.name === "Pieza", creado);
+    ok("el overlay queda montado",      !!c14._overlay, c14._overlay);
+    c14._closePopup();
+    ok("cerrar lo desmonta",            c14._overlay === null, c14._overlay);
+  })().then(() => {
+
   try { new ROOMS().setConfig({}); ok("sin rooms lanza error", false, "no lanzo"); }
   catch (e) { ok("sin rooms lanza error claro", /rooms/.test(e.message), e.message); }
+
+  console.log(fail === 0 ? "\n=== TODO PASA ===" : `\n=== ${fail} FALLAS ===`);
+  process.exit(fail ? 1 : 0);
+  });
 }
 
 console.log(fail === 0 ? "\n=== TODO PASA ===" : `\n=== ${fail} FALLAS ===`);

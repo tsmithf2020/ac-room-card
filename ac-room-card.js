@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.17.0";
+const VERSION = "0.18.0";
 
 const T = {
   today: "Hoy",
@@ -1249,6 +1249,41 @@ class AcRoomsCard extends HTMLElement {
     }
   }
 
+  /* Abre la pieza completa en un ac-room-card sobre el dashboard, para no
+     tener que meter todo en una linea que en el telefono no cabe. */
+  async _openPopup(r) {
+    if (this._overlay) return;
+    const helpers = await window.loadCardHelpers();
+    const cfg = { type: "custom:ac-room-card", ...r };
+    delete cfg.popup;
+    const card = await helpers.createCardElement(cfg);
+    card.hass = this._hass;
+    this._popupCard = card;
+
+    const ov = document.createElement("div");
+    ov.className = "ov";
+    const caja = document.createElement("div");
+    caja.className = "ovbox";
+    caja.appendChild(card);
+    ov.appendChild(caja);
+    ov.addEventListener("click", (ev) => { if (ev.target === ov) this._closePopup(); });
+    this._escHandler = (ev) => { if (ev.key === "Escape") this._closePopup(); };
+    document.addEventListener("keydown", this._escHandler);
+    this.shadowRoot.appendChild(ov);
+    this._overlay = ov;
+  }
+
+  _closePopup() {
+    if (!this._overlay) return;
+    this._overlay.remove();
+    this._overlay = null;
+    this._popupCard = null;
+    if (this._escHandler) {
+      document.removeEventListener("keydown", this._escHandler);
+      this._escHandler = null;
+    }
+  }
+
   _tick(on) {
     if (on && !this._ticker) this._ticker = setInterval(() => this._update(), 1000);
     else if (!on && this._ticker) { clearInterval(this._ticker); this._ticker = null; }
@@ -1256,6 +1291,7 @@ class AcRoomsCard extends HTMLElement {
 
   disconnectedCallback() {
     this._tick(false);
+    this._closePopup();
   }
 
   /* ---------- construccion ---------- */
@@ -1281,6 +1317,11 @@ class AcRoomsCard extends HTMLElement {
     cont.className = "rooms";
     card.appendChild(cont);
 
+    // Ancho fijo para la columna de ventiladores segun la pieza que mas
+    // tiene, para que el icono de ventana caiga siempre en el mismo x.
+    const maxFans = Math.max(1, ...this._config.rooms.map((r) => normEntries(r.fans).length));
+    cont.style.setProperty("--acrc-fans", String(maxFans));
+
     this._filas = this._config.rooms.map((r) => {
       const fila = document.createElement("div");
       fila.className = "room";
@@ -1297,8 +1338,11 @@ class AcRoomsCard extends HTMLElement {
         ev.stopPropagation();
         this._toggle(r);
       });
-      fila.querySelector(".rname").addEventListener("click", () => moreInfo(this, r.entity));
-      fila.querySelector(".temps").addEventListener("click", () => moreInfo(this, r.entity));
+      const abrir = () => (this._config.popup === false
+        ? moreInfo(this, r.entity)
+        : this._openPopup(r));
+      fila.querySelector(".rname").addEventListener("click", abrir);
+      fila.querySelector(".temps").addEventListener("click", abrir);
       fila.querySelector(".pw").addEventListener("click", (ev) => {
         ev.stopPropagation();
         moreInfo(this, r.power_entity || r.entity);
@@ -1344,6 +1388,7 @@ class AcRoomsCard extends HTMLElement {
 
   _update() {
     const L = this._config.labels;
+    if (this._popupCard) this._popupCard.hass = this._hass;
     let hayTimer = false;
     const orden = this._config.sort === "active" ? [...this._filas].sort(
       (a, b) => Number(this._encendida(b.r)) - Number(this._encendida(a.r))) : this._filas;
@@ -1382,9 +1427,11 @@ class AcRoomsCard extends HTMLElement {
       const win = fila.querySelector(".win");
       const dot = fila.querySelector(".batdot");
       if (!lista.length) {
-        wrap.style.display = "none";
+        // visibility, no display: la columna se mantiene para que el icono
+        // caiga en el mismo x en todas las filas.
+        wrap.style.visibility = "hidden";
       } else {
-        wrap.style.display = "";
+        wrap.style.visibility = "";
         const w = computeWindows(this._hass, lista, L);
         const CLASES = { closed: "win closed", some: "win some", all: "win open", unknown: "win unknown" };
         win.className = CLASES[w.estado];
@@ -1403,9 +1450,9 @@ class AcRoomsCard extends HTMLElement {
       if (!t || !t.entity || (restan === null && !on)) {
         // Parado y con la pieza apagada no aporta nada: ocupa espacio y no
         // se puede arrancar un timer de un equipo que no esta andando.
-        tmr.style.display = "none";
+        tmr.style.visibility = "hidden";
       } else {
-        tmr.style.display = "";
+        tmr.style.visibility = "";
         const corriendo = restan !== null;
         if (corriendo) hayTimer = true;
         tmr.className = corriendo ? "tmr on" : "tmr";
@@ -1448,17 +1495,18 @@ class AcRoomsCard extends HTMLElement {
       }
       .pwr ha-icon { --mdc-icon-size: 24px; }
       .pwr.on { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
-      .rname { flex: 1 1 auto; min-width: 0; cursor: pointer;
+      .rname { flex: 1 1 auto; min-width: 64px; cursor: pointer;
                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .room.on .rname { font-weight: 500; }
-      .temps { flex: 0 0 auto; cursor: pointer; font-variant-numeric: tabular-nums;
+      .temps { flex: 0 0 auto; width: 108px; text-align: right; cursor: pointer;
+               font-variant-numeric: tabular-nums;
                color: var(--primary-text-color); white-space: nowrap; }
       .temps .arr { margin: 0 3px; color: var(--secondary-text-color); }
       .temps .uom { color: var(--secondary-text-color); margin-left: 1px; }
-      .pw { flex: 0 0 auto; cursor: pointer; min-width: 52px; text-align: right;
+      .pw { flex: 0 0 auto; cursor: pointer; width: 52px; text-align: right;
             color: var(--secondary-text-color); font-variant-numeric: tabular-nums;
             white-space: nowrap; }
-      .winwrap { position: relative; display: inline-flex; flex: 0 0 auto; }
+      .winwrap { position: relative; display: inline-flex; flex: 0 0 auto; width: 24px; }
       .win { --mdc-icon-size: 24px; cursor: pointer; }
       .win.closed  { color: var(--success-color, #43a047); }
       .win.some    { color: var(--warning-color, #ffa600); }
@@ -1469,14 +1517,17 @@ class AcRoomsCard extends HTMLElement {
         background: var(--error-color, #db4437);
         box-shadow: 0 0 0 1.5px var(--card-background-color, #fff); }
       .tmr {
-        display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+        display: inline-flex; align-items: center; gap: 3px;
+        flex: 0 0 auto; width: 62px; justify-content: flex-start;
         border: none; background: transparent; padding: 0; cursor: pointer;
         font: inherit; font-size: 14px; font-variant-numeric: tabular-nums;
         color: var(--secondary-text-color);
       }
       .tmr ha-icon { --mdc-icon-size: 22px; color: inherit; }
       .tmr.on { color: var(--warning-color, #ffa600); font-weight: 500; }
-      .fans { display: inline-flex; gap: 10px; flex: 0 0 auto; }
+      .fans { display: inline-flex; gap: 10px; flex: 0 0 auto;
+              width: calc(var(--acrc-fans, 1) * 24px + (var(--acrc-fans, 1) - 1) * 10px);
+              justify-content: flex-start; }
       .rfan { border: none; background: transparent; padding: 0; cursor: pointer;
               display: inline-flex; }
       .rfan ha-icon { --mdc-icon-size: 24px; color: inherit; }
@@ -1484,9 +1535,21 @@ class AcRoomsCard extends HTMLElement {
       .rfan.on ha-icon { animation: acrc-spin 2s linear infinite; }
       .rfan.off { color: var(--info-color, #039be5); }
       @keyframes acrc-spin { to { transform: rotate(360deg); } }
-      @media (max-width: 380px) {
-        .room { gap: 8px; padding: 6px 10px; font-size: 15px; }
+      .ov {
+        position: fixed; inset: 0; z-index: 9;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, .45); padding: 16px;
+        animation: acrc-in .12s ease-out;
+      }
+      .ovbox { width: 100%; max-width: 420px; max-height: 88vh; overflow: auto; }
+      @keyframes acrc-in { from { opacity: 0 } to { opacity: 1 } }
+      @media (max-width: 420px) {
         .pw { display: none; }
+      }
+      @media (max-width: 380px) {
+        .room { gap: 7px; padding: 6px 10px; font-size: 15px; }
+        .temps { width: 96px; }
+        .tmr { width: 54px; }
       }
     `;
     return s;
