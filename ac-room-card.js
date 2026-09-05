@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 const T = {
   power: "Potencia",
@@ -56,7 +56,9 @@ class AcRoomCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._config && this._config.entity.startsWith("climate.") ? 6 : 3;
+    if (!this._config) return 3;
+    if (this._config.base_card) return 4;
+    return this._config.entity.startsWith("climate.") ? 6 : 3;
   }
 
   /* ---------- construccion ---------- */
@@ -82,12 +84,22 @@ class AcRoomCard extends HTMLElement {
     const domain = cfg.entity.split(".")[0];
 
     const helpers = await window.loadCardHelpers();
-    const innerCfg =
-      domain === "climate"
-        ? { type: "thermostat", entity: cfg.entity }
-        : { type: "tile", entity: cfg.entity, features_position: "bottom", vertical: false };
-    if (cfg.name) innerCfg.name = cfg.name;
-    if (cfg.features) innerCfg.features = cfg.features;
+
+    // base_card permite envolver CUALQUIER card (custom:mini-climate,
+    // custom:simple-thermostat, etc). Sin el, se usa el thermostat integrado
+    // para entidades climate y un tile para el resto.
+    let innerCfg;
+    if (cfg.base_card) {
+      innerCfg = { ...cfg.base_card };
+      if (!innerCfg.entity) innerCfg.entity = cfg.entity;
+    } else {
+      innerCfg =
+        domain === "climate"
+          ? { type: "thermostat", entity: cfg.entity }
+          : { type: "tile", entity: cfg.entity, features_position: "bottom", vertical: false };
+      if (cfg.name) innerCfg.name = cfg.name;
+      if (cfg.features) innerCfg.features = cfg.features;
+    }
 
     this._inner = await helpers.createCardElement(innerCfg);
     this._inner.hass = this._hass;

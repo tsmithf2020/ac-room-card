@@ -93,7 +93,14 @@ ok("getCardSize() = 3 para no-climate", c.getCardSize() === 3, c.getCardSize());
 c = mk({ entity: "climate.dorm" });
 ok("getCardSize() = 6 para climate",    c.getCardSize() === 6, c.getCardSize());
 
-console.log("\n--- caso 6: setConfig sin entity debe tirar error");
+console.log("\n--- caso 6: base_card (envolver mini-climate)");
+c = mk({ entity: "climate.dorm", power_entity: "sensor.pot",
+  base_card: { type: "custom:mini-climate", fan_mode: { hide: true } } });
+ok("getCardSize() = 4 con base_card", c.getCardSize() === 4, c.getCardSize());
+ok("filas siguen funcionando",        c._rows.power.querySelector(".value").textContent === "1234 W", c._rows.power.querySelector(".value").textContent);
+ok("config original no se muta",      c._config.base_card.entity === undefined, c._config.base_card);
+
+console.log("\n--- caso 7: setConfig sin entity debe tirar error");
 try { new CARD().setConfig({}); ok("lanza error", false, "no lanzo"); }
 catch (e) { ok("lanza error con mensaje claro", /Falta 'entity'/.test(e.message), e.message); }
 

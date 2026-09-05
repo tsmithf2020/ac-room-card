@@ -50,11 +50,31 @@ features:
 | `energy_today_entity` | string | no | Sensor de energia del dia. |
 | `energy_month_entity` | string | no | Sensor de energia del mes. |
 | `window_entity` | string | no | `binary_sensor` de la ventana. `on` = abierta. |
-| `features` | list | no | Se pasa tal cual al card `thermostat` integrado. |
+| `base_card` | map | no | Config completa del card que va arriba. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
+| `features` | list | no | Se pasa tal cual al `thermostat` integrado. Se ignora si usas `base_card`. |
 | `labels` | map | no | Sobrescribe los textos (`power`, `today`, `month`, `window`, `open`, `closed`, `warn`, `unavailable`). |
 
 Cada fila se oculta sola si no le pasas su entidad, asi que sirve igual en una
 pieza que tiene los tres sensores y en una que solo tiene potencia.
+
+### Envolver otro card como base
+
+`base_card` acepta la config completa de cualquier card. Util si ya usas
+`mini-climate-card`, `simple-thermostat` u otro y solo quieres agregarle las
+filas de abajo:
+
+```yaml
+type: custom:ac-room-card
+entity: climate.dormitorio
+power_entity: sensor.ac_dorm_potencia
+window_entity: binary_sensor.ventana_dorm_contact
+base_card:
+  type: custom:mini-climate
+  fan_mode:
+    hide: true
+```
+
+Si `base_card` no trae `entity`, hereda la de arriba.
 
 ### Sin entidad climate
 
