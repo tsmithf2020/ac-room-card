@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.20.1";
+const VERSION = "0.20.2";
 
 const T = {
   today: "Hoy",
@@ -1558,6 +1558,7 @@ class AcRoomsCard extends HTMLElement {
         font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
         font-weight: 500; color: var(--secondary-text-color);
       }
+      .head .temps > span { overflow: hidden; text-overflow: clip; }
       .head .temps > span, .head .pw { color: inherit; font-weight: 500; }
       .head .pw { display: inline-flex; justify-content: flex-end; align-items: center; }
       .head .pw ha-icon { --mdc-icon-size: 14px; }
@@ -1606,14 +1607,21 @@ class AcRoomsCard extends HTMLElement {
       @keyframes acrc-in { from { opacity: 0 } to { opacity: 1 } }
       /* Antes la potencia se escondia bajo 420px. Se prefiere apretar las
          columnas: en un telefono el consumo es justo lo que se quiere ver. */
+      /* Ojo con los shorthand aca: .head tambien es un .room, y estas reglas
+         van despues, asi que con la misma especificidad le ganan. El tamano de
+         letra y el padding vertical se aplican solo a las filas de datos; el
+         gap y el padding lateral SI van a las dos, porque son los que alinean
+         las columnas con su encabezado. */
       @media (max-width: 460px) {
-        .room { gap: 7px; padding: 6px 10px; font-size: 15px; }
+        .room { gap: 7px; padding-left: 10px; padding-right: 10px; }
+        .room:not(.head) { padding-top: 6px; padding-bottom: 6px; font-size: 15px; }
         .temps > span { width: 46px; }
         .pw { width: 46px; }
         .tmr { width: 54px; }
       }
       @media (max-width: 360px) {
-        .room { gap: 5px; padding: 6px 8px; font-size: 14px; }
+        .room { gap: 5px; padding-left: 8px; padding-right: 8px; }
+        .room:not(.head) { padding-top: 6px; padding-bottom: 6px; font-size: 14px; }
         .temps > span { width: 42px; }
         .pw { width: 42px; }
         .rname { min-width: 56px; }
