@@ -1,115 +1,216 @@
 # AC Room Card
 
-[![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.14.0-blue.svg)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+![version](https://img.shields.io/badge/version-0.15.0-blue.svg)
+![license](https://img.shields.io/badge/license-MIT-green.svg)
 
-Card de Lovelace para Home Assistant que toma el card `thermostat` integrado y
-le agrega, debajo, una linea compacta: un rayo, los **watts** que esta
-consumiendo y, al lado, el **simbolo de la ventana** de la pieza — **verde si
-esta cerrada, rojo si esta abierta** — y, opcional, la **temperatura** de la
-pieza. Sin etiquetas de texto.
+> 🇪🇸 [Léeme en español](README.es.md)
+
+A Lovelace card that **wraps your existing climate card** and adds the row it is
+always missing: live power draw, window state, room temperature, room fans, and a
+built-in **shutdown timer**.
 
 ```
-⚡  12 W  ⬜  🌡 22,6 °C
+┌───────────────────────────────────┐
+│ Bedroom                           │  ← your own title
+├───────────────────────────────────┤
+│   (your thermostat card, intact)  │  ← wrapped, not replaced
+├───────────────────────────────────┤
+│ ⚡ 340 W   🪟   🌡 22.6 °C   🌀    │
+├───────────────────────────────────┤
+│ ⏱  −  60 min  +        Schedule   │
+└───────────────────────────────────┘
 ```
 
-Opcionalmente, una segunda linea con la energia consumida, los **ventiladores**
-de la pieza y un **temporizador de apagado** integrado, para no tener que armarlo
-con tres cards apiladas.
+## Why
 
-Tocar la potencia, la ventana o la temperatura abre el dialogo de esa entidad,
-con su historial.
+Most climate cards show temperature and mode, and nothing else. But the questions
+you actually have about an air conditioner are *is it drawing power right now*,
+*is a window open while it runs*, and *when will it turn off*. This card adds
+exactly that, without replacing the card you already like.
 
-No copia codigo de Home Assistant. Instancia el card integrado en tiempo de
-ejecucion via `loadCardHelpers()`, asi que hereda su comportamiento, sus
-traducciones y sus actualizaciones sin quedar acoplado a modulos internos del
-frontend.
+It does not reimplement a thermostat. It instantiates **any** other card at
+runtime through `loadCardHelpers()` and draws around it, so you keep that card's
+behaviour, translations and updates.
 
-## Instalacion
+**No dependencies, no build step.** One `.js` file.
 
-### HACS (repositorio personalizado)
-1. HACS -> Frontend -> menu (arriba a la derecha) -> *Custom repositories*.
-2. URL del repo, categoria **Dashboard** (o *Lovelace*, segun la version).
-3. Instalar y recargar el navegador.
+---
+
+## Installation
+
+### HACS (custom repository)
+
+1. HACS → three-dot menu → **Custom repositories**
+2. URL: `https://github.com/tsmithf2020/ac-room-card`, category **Dashboard**
+3. Install, then hard-reload your browser (Ctrl+Shift+R)
 
 ### Manual
-1. Copiar `ac-room-card.js` a `/config/www/ac-room-card/`.
-2. Ajustes -> Paneles -> menu -> *Recursos* -> Anadir:
-   URL `/local/ac-room-card/ac-room-card.js`, tipo **Modulo JavaScript**.
-3. Recargar el navegador con Ctrl+Shift+R.
 
-## Uso
+1. Copy `ac-room-card.js` to `/config/www/ac-room-card/`
+2. Settings → Dashboards → three-dot menu → **Resources** → Add
+   `/local/ac-room-card/ac-room-card.js` as a **JavaScript Module**
+3. Hard-reload your browser
 
-Se puede configurar **desde la interfaz**: al agregar el card aparece el editor
-visual con selectores de entidad ya filtrados (potencia y energia por
-`device_class`, temperatura por `device_class`, etc.). El YAML de abajo sigue
-siendo valido y es lo que el editor produce.
+> If you install through HACS **and** manually, the card is loaded twice from two
+> different URLs. It will not crash — the second registration is ignored — but
+> whichever loads first wins, and updates will appear not to apply. Keep only one.
 
-> `base_card` no se edita en el formulario, pero **se conserva** al guardar
-> desde la UI. Para cambiarlo, usa el editor YAML del card.
+---
 
+## Quick start
+
+The card is fully configurable **from the UI**. Add it, pick your climate entity,
+and fill in whatever sensors you have. Everything except `entity` is optional and
+hides itself when absent.
+
+Minimal:
 
 ```yaml
 type: custom:ac-room-card
-entity: climate.dormitorio
-name: Dorm
-power_entity: sensor.ac_dorm_potencia
-window_entity: binary_sensor.ventana_dorm_contact
-temp_entity: sensor.temp_dorm
-energy_today_entity: sensor.ac_dorm_energy_daily   # opcional
-energy_month_entity: sensor.ac_dorm_energy_monthly # opcional
-features:
-  - type: climate-fan-modes
-    style: dropdown
-  - type: climate-hvac-modes
+entity: climate.bedroom
 ```
 
-### Opciones
+Realistic:
 
-| Opcion | Tipo | Req. | Descripcion |
+```yaml
+type: custom:ac-room-card
+name: Bedroom
+entity: climate.bedroom
+power_entity: sensor.bedroom_ac_power
+temp_entity: sensor.bedroom_temperature
+window_entity: binary_sensor.bedroom_window
+fans: [fan.bedroom_ceiling]
+timer:
+  entity: timer.bedroom_ac
+  minutes_entity: input_number.bedroom_ac_minutes
+  button_entity: input_button.bedroom_ac_timer
+```
+
+---
+
+## Options
+
+| Option | Type | Required | Description |
 |---|---|:--:|---|
-| `name` | string | no | Nombre que se muestra como encabezado arriba del todo. Si lo pones, **no** se le pasa al card interno, para no verlo dos veces. |
-| `icon` | string | no | Icono al lado del nombre. Sin esto no hay icono. |
-| `entity` | string | si | Entidad `climate.*`. Tambien acepta `input_boolean.*` / `switch.*`: en ese caso dibuja un `tile` en vez del termostato. |
-| `name` | string | no | Nombre mostrado. |
-| `power_entity` | string | no | Sensor de potencia (W). |
-| `energy_today_entity` | string | no | Sensor de energia del dia. |
-| `energy_month_entity` | string | no | Sensor de energia del mes. |
-| `window_entity` | string | no | `binary_sensor` de la ventana. `on` = abierta (rojo), `off` = cerrada (verde). Se dibuja en la misma linea de la potencia. |
-| `temp_entity` | string | no | Sensor de temperatura de la pieza. Se dibuja a la derecha del simbolo de ventana. |
-| `fan_mode` | bool | no | Muestra la velocidad del ventilador **del equipo** (`fan_modes` de la entidad `climate`) como desplegable en la misma linea. |
-| `fan_mode_names` | map | no | Renombra las velocidades, ej. `auto: Automatico`. |
-| `fans` | list | no | Ventiladores de la pieza. Ver abajo. |
-| `modes` | list | no | Selector de modo para equipos sin entidad `climate`. Ver abajo. |
-| `timer` | map | no | Temporizador de apagado integrado. Ver abajo. |
-| `show_warning` | bool | no | `false` por defecto. Si lo activas, agrega un aviso de texto cuando la ventana esta abierta *y* el aire andando. El icono rojo ya cubre el caso, por eso viene apagado. |
-| `base_card` | map | no | Config completa del card que va arriba. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
-| `base_card_style` | string \| map | no | CSS que se inyecta **dentro** del shadow root del card envuelto. Como mapa `selector: css`, llega tambien a shadow roots anidados. |
-| `features` | list | no | Se pasa tal cual al `thermostat` integrado. Se ignora si usas `base_card`. |
-| `labels` | map | no | Sobrescribe los textos (`today`, `month`, `window`, `open`, `closed`, `warn`, `unavailable`). |
+| `entity` | string | **yes** | `climate.*`. Also accepts `input_boolean.*` / `switch.*` for IR units — see [Mode selector](#mode-selector-cool--heat). |
+| `name` | string | no | Title drawn above everything. When set it is **not** passed to the wrapped card, so you do not see it twice. |
+| `icon` | string | no | Icon next to the title. No icon by default. |
+| `power_entity` | string | no | Power sensor (W). |
+| `temp_entity` | string | no | Room temperature sensor. |
+| `window_entity` | string \| list | no | One or more window sensors — see [Windows](#windows). |
+| `battery_warn` | number | no | Low-battery threshold in %, default `20`. |
+| `fans` | list | no | Room fans — see [Fans](#fans). |
+| `fan_mode` | bool | no | Show the **unit's own** fan speed (`fan_modes` of the climate entity). |
+| `fan_mode_names` | map | no | Rename those speeds, e.g. `auto: Automatic`. |
+| `energy_today_entity` | string | no | Energy used today. |
+| `energy_month_entity` | string | no | Energy used this month. |
+| `timer` | map | no | Built-in shutdown timer — see [Timer](#timer). |
+| `modes` | list | no | Cool/heat selector for units without a `climate` entity. |
+| `base_card` | map | no | Full config of the card to wrap. Defaults to the built-in `thermostat`. |
+| `base_card_style` | string \| map | no | CSS injected **inside** the wrapped card's shadow DOM. |
+| `show_warning` | bool | no | Text banner when a window is open while the unit runs. Off by default — the red icon already says it. |
+| `features` | list | no | Passed to the built-in `thermostat`. Ignored when `base_card` is set. |
+| `labels` | map | no | Override any UI string. |
 
-Cada cosa se oculta sola si no le pasas su entidad: sin `window_entity` no hay
-icono, sin `power_entity` no hay numero, sin sensores de energia no hay segunda
-linea. Sirve igual en una pieza que tiene todo y en una que solo tiene potencia.
+---
 
-Los colores salen de las variables del tema (`--success-color`, `--error-color`),
-asi que respetan el tema claro/oscuro.
+## Windows
 
-### Temporizador integrado
+```yaml
+window_entity: binary_sensor.bedroom_window          # one
 
-> **Esto no funciona solo.** Home Assistant no trae temporizadores de apagado
-> para climas: hay que crear tres ayudantes y una automatizacion. El card los
-> dibuja y los opera, pero no los inventa. Abajo esta todo lo que necesitas.
+window_entity:                                        # or several
+  - binary_sensor.bedroom_north
+  - binary_sensor.bedroom_south
+```
 
-#### 1. Crear los ayudantes
+| State | Colour |
+|---|---|
+| All closed | 🟢 green |
+| **Some** open | 🟠 orange |
+| All open | 🔴 red |
+| No data | ⚪ grey |
 
-En `configuration.yaml` (o desde Ajustes -> Dispositivos y servicios ->
-Ayudantes, si prefieres la interfaz). Cambia `dorm` por el nombre de tu pieza:
+With a single window orange can never happen, so it only ever means "partially
+open". The tooltip lists every window with its state and, when there is more than
+one, an `open/total` count. Tapping opens the more-info dialog of the first open
+window.
+
+### Low battery
+
+Door and window sensors are battery-powered, and a dead one is a **silent
+failure**: it stops reporting and the window looks closed forever. Give each
+window its battery sensor and the card puts a small red dot on the icon when any
+of them drops below `battery_warn`:
+
+```yaml
+window_entity:
+  - entity: binary_sensor.bedroom_north
+    battery: sensor.bedroom_north_battery
+  - entity: binary_sensor.bedroom_south
+    battery: sensor.bedroom_south_battery
+battery_warn: 20
+```
+
+The tooltip on the dot says which sensor and what percentage.
+
+---
+
+## Fans
+
+```yaml
+fans:
+  - fan.bedroom_ceiling           # just the entity_id
+  - entity: switch.bedroom_floor  # or an object, for a custom name and icon
+    name: Floor fan
+    icon: mdi:fan
+```
+
+**One** fan is drawn on the data line, next to power and temperature. **Two or
+more** get their own row below the timer. Same compact button either way: just
+the icon, no frame. The name lives in the tooltip.
+
+Tap to toggle. **Green when on** (with the icon spinning), **blue when off**.
+Accepts `fan`, `switch` and `light` entities — some fans end up exposed in the
+`light` domain — because toggling uses `homeassistant.toggle`.
+
+> These are the **room's** fans. For the air conditioner's own fan speed, see
+> `fan_mode` below.
+
+---
+
+## Unit fan speed
+
+```yaml
+fan_mode: true
+fan_mode_names:
+  auto: Automatic
+  silent: Quiet
+```
+
+A dropdown with the speeds the `climate` entity declares (`silent`, `low`,
+`medium`, `high`, `auto`, ...), showing the current one. Selecting one calls
+`climate.set_fan_mode`. Nothing is drawn if the unit declares no `fan_modes`.
+
+---
+
+## Timer
+
+> **This does not work on its own.** Home Assistant has no built-in shutdown
+> timer for climate entities: you need three helpers and one automation. The card
+> draws and drives the countdown, **but it is the automation that turns the unit
+> off.** Everything you need is below.
+
+### 1. Create the helpers
+
+In `configuration.yaml` (or through Settings → Devices & Services → Helpers).
+Replace `bedroom` with your room:
 
 ```yaml
 input_number:
-  apagado_aire_dorm:
-    name: Apagado AC Dorm
+  bedroom_ac_minutes:
+    name: Bedroom AC minutes
     icon: mdi:hvac
     min: 0
     max: 480
@@ -118,267 +219,205 @@ input_number:
     mode: slider
 
 input_button:
-  timer_ac_dorm:
-    name: Timer AC Dorm
+  bedroom_ac_timer:
+    name: Bedroom AC timer
     icon: mdi:home-thermometer
 
 timer:
-  timer_ac_dorm_var:
-    name: Timer AC Dorm Var
+  bedroom_ac:
+    name: Bedroom AC timer
     duration: "00:00:00"
     restore: false
 ```
 
-Se aplican sin reiniciar: Herramientas para desarrolladores -> ACCIONES ->
-`input_number.reload`, `input_button.reload` y `timer.reload`.
+Apply without restarting: Developer Tools → Actions → `input_number.reload`,
+`input_button.reload` and `timer.reload`.
 
-#### 2. Crear la automatizacion
-
-Es la que arranca la cuenta y la que efectivamente apaga el equipo:
+### 2. Create the automation
 
 ```yaml
-alias: AC - Auto-off con timer DORM
+alias: AC - auto-off timer BEDROOM
 mode: restart
 triggers:
   - trigger: state
-    entity_id: input_button.timer_ac_dorm
+    entity_id: input_button.bedroom_ac_timer
     id: start
   - trigger: event
     event_type: timer.finished
     event_data:
-      entity_id: timer.timer_ac_dorm_var
+      entity_id: timer.bedroom_ac
     id: finished
   - trigger: state
-    entity_id: climate.dormitorio
+    entity_id: climate.bedroom
     to: "off"
     not_from: [unavailable, unknown]
     id: manual_off
 conditions: []
 actions:
   - choose:
-      # Arrancar, solo si el aire esta andando y hay minutos configurados
+      # Start, only if the unit is running and minutes are set
       - conditions:
           - condition: trigger
             id: start
           - condition: numeric_state
-            entity_id: input_number.apagado_aire_dorm
+            entity_id: input_number.bedroom_ac_minutes
             above: 0
           - condition: template
-            value_template: "{{ states('climate.dormitorio') != 'off' }}"
+            value_template: "{{ states('climate.bedroom') != 'off' }}"
         sequence:
           - action: timer.start
             target:
-              entity_id: timer.timer_ac_dorm_var
+              entity_id: timer.bedroom_ac
             data:
-              duration: "{{ (states('input_number.apagado_aire_dorm') | int) * 60 }}"
-      # Se cumplio el tiempo: apagar
+              duration: "{{ (states('input_number.bedroom_ac_minutes') | int) * 60 }}"
+      # Time is up: turn it off
       - conditions:
           - condition: trigger
             id: finished
         sequence:
           - action: climate.turn_off
             target:
-              entity_id: climate.dormitorio
-      # Lo apagaron a mano antes: cancelar la cuenta
+              entity_id: climate.bedroom
+      # Turned off by hand first: cancel the countdown
       - conditions:
           - condition: trigger
             id: manual_off
           - condition: state
-            entity_id: timer.timer_ac_dorm_var
+            entity_id: timer.bedroom_ac
             state: active
         sequence:
           - action: timer.cancel
             target:
-              entity_id: timer.timer_ac_dorm_var
+              entity_id: timer.bedroom_ac
 ```
 
-Dos detalles que evitan sorpresas: la condicion `above: 0` impide que con cero
-minutos el `timer.start` termine al instante y apague el equipo apenas aprietas
-el boton; y `not_from: [unavailable, unknown]` evita que una reconexion del
-equipo cancele un temporizador en curso.
+Two details that save you grief. `above: 0` stops a zero-minute timer from
+finishing instantly and killing the unit the moment you press the button. And
+`not_from: [unavailable, unknown]` keeps a reconnect from cancelling a running
+countdown.
 
-Si tu equipo no tiene entidad `climate` y se controla con un `input_boolean`
-(tipico de un IR por escenas), reemplaza `climate.turn_off` por
-`input_boolean.turn_off` y ajusta las condiciones a ese `input_boolean`.
+For a unit without a `climate` entity, swap `climate.turn_off` for
+`input_boolean.turn_off` and point the conditions at that boolean.
 
-#### 3. Apuntar el card a los tres
+### 3. Point the card at them
 
 ```yaml
 timer:
-  entity: timer.timer_ac_dorm_var           # requerido
-  minutes_entity: input_number.apagado_aire_dorm
-  button_entity: input_button.timer_ac_dorm # opcional pero recomendado
+  entity: timer.bedroom_ac                       # required
+  minutes_entity: input_number.bedroom_ac_minutes
+  button_entity: input_button.bedroom_ac_timer   # optional but recommended
 ```
 
-Con el temporizador parado muestra los minutos con botones `-` / `+` (respeta
-`step`, `min` y `max` del `input_number`) y un boton **Programar**. Corriendo,
-muestra la cuenta regresiva y el boton pasa a **Cancelar**.
+Idle, the card shows the minutes with `−` / `+` (honouring the `input_number`
+`step`, `min` and `max`) and a **Schedule** button. Running, it shows the
+countdown and the button becomes **Cancel**.
 
-`button_entity` es opcional pero conviene: al apretarlo dispara tu
-`input_button`, asi **la automatizacion sigue siendo la que manda** y aplica sus
-validaciones. Sin el, el card llama `timer.start` directo saltandose esas
-comprobaciones — y ojo, en ese caso igual necesitas la automatizacion del paso 2
-para la parte de `timer.finished`, porque el card **no apaga el equipo**: solo
-maneja la cuenta.
+`button_entity` is optional but worth setting: pressing it fires *your*
+`input_button`, so your automation stays in charge and applies its checks.
+Without it the card calls `timer.start` directly, skipping them — and you still
+need the automation for the `timer.finished` half.
 
-La cuenta regresiva se calcula en el navegador desde `finishes_at`, con un
-`setInterval` que solo corre mientras el temporizador esta activo. No necesita
-un sensor de plantilla refrescando cada segundo ni escribe nada en el recorder.
+The countdown is computed in the browser from `finishes_at`, with an interval
+that only runs while the timer is active. No template sensor ticking every second
+into your recorder.
 
-### Envolver otro card como base
+---
 
-`base_card` acepta la config completa de cualquier card. Util si ya usas
-`mini-climate-card`, `simple-thermostat` u otro y solo quieres agregarle las
-filas de abajo:
+## Mode selector (cool / heat)
+
+For IR units with no `climate` entity, driven by one `input_boolean` per mode:
 
 ```yaml
 type: custom:ac-room-card
-entity: climate.dormitorio
-power_entity: sensor.ac_dorm_potencia
-window_entity: binary_sensor.ventana_dorm_contact
-temp_entity: sensor.temp_dorm
+name: Kids room
+entity: input_boolean.kids_ac
+modes:
+  - name: Cool
+    entity: input_boolean.kids_ac
+    icon: mdi:snowflake
+  - name: Heat
+    entity: input_boolean.kids_ac_heat
+    icon: mdi:fire
+```
+
+Draws **Off / Cool / Heat** and marks the active one. With a single mode it
+becomes a plain on/off.
+
+Switching **turns the other booleans off first, then turns the chosen one on**.
+The order matters: if each boolean fires an IR scene, doing it the other way
+round leaves the unit off, because the previous mode's "off" arrives after the
+new mode's "on".
+
+With `modes` and no `base_card` the card wraps nothing and draws itself
+completely.
+
+> Each boolean must be wired to whatever actually drives the unit — a scene, a
+> `remote.send_command`, whatever you use. The card flips the boolean; it does
+> not know how to send IR.
+
+---
+
+## Wrapping another card
+
+```yaml
 base_card:
   type: custom:mini-climate
   fan_mode:
-    hide: true
+    hide: false
 ```
 
-Si `base_card` no trae `entity`, hereda la de arriba.
+`base_card` takes the complete config of any card, custom or built-in. Without
+it, the built-in `thermostat` is used for `climate` entities and a `tile` for
+anything else. If `base_card` has no `entity`, it inherits the one above.
 
-### Velocidad del ventilador del equipo
+### Restyling the wrapped card
 
-```yaml
-fan_mode: true
-fan_mode_names:      # opcional
-  auto: Automatico
-  silent: Silencioso
-```
-
-Dibuja un desplegable con las velocidades que declara la entidad `climate`
-(`silent`, `low`, `medium`, `high`, `full`, `auto`... segun el equipo) y marca la
-que esta puesta. Elegir una llama `climate.set_fan_mode`.
-
-No confundir con `fans`, que son los ventiladores **de la pieza**: este es el
-del propio aire acondicionado. Si el equipo no declara `fan_modes`, el control
-no se dibuja.
-
-### Ventiladores
-
-```yaml
-fans:
-  - fan.ventilador_pieza          # basta el entity_id
-  - entity: fan.ventilador_techo  # o un objeto, para nombre e icono propios
-    name: Techo
-    icon: mdi:ceiling-fan
-```
-
-**Uno solo** se dibuja pegado a la potencia, la ventana y la temperatura, en la
-misma linea. **Dos o mas** se dibujan en su propia fila, debajo del temporizador.
-El boton es el mismo en los dos casos: el icono pelado, sin marco ni fondo,
-para que combine con el rayo y el termometro de la misma linea. El nombre va en
-el tooltip, que es lo que distingue un ventilador de otro.
-
-**Los nombres se editan desde el editor visual**: al elegir los ventiladores
-aparece un campo de texto por cada uno. Si lo dejas vacio se usa el
-`friendly_name` de la entidad. En YAML es el `name` de cada objeto.
-
-Se prenden y apagan tocandolos. **Verde encendido, azul apagado** (con el icono
-girando mientras esta en marcha). Acepta entidades `fan`, `switch` y tambien
-`light`, porque algunos ventiladores quedan expuestos en ese dominio; el toggle
-usa `homeassistant.toggle`, que funciona con los tres.
-
-### Retocar el card envuelto
-
-Un card de HACS vive en su propio shadow DOM, asi que el CSS de afuera no lo
-alcanza. `base_card_style` inyecta CSS ahi adentro.
-
-Como **mapa**, cada clave es un selector de un elemento con shadow root propio,
-y su CSS se inyecta ahi adentro. La clave vacia es el shadow root del card
-envuelto.
-
-Ejemplo real: `mini-climate` muestra las dos temperaturas como `26.0 / 21 °C`
-sin decir cual es cual. Los numeros no estan en su shadow root sino en el de
-`<mc-temperature>`, un nivel mas adentro, como tres `<span class="state__value">`
-(objetivo, la barra, actual):
+A card from HACS lives in its own shadow DOM, so your CSS cannot reach it.
+`base_card_style` injects CSS in there. As a **map**, each key is a selector for
+an element with its own shadow root, and the empty key is the wrapped card's own
+root:
 
 ```yaml
 base_card_style:
+  "": |
+    .mc-climate { padding-top: 0 !important; }
   mc-temperature: |
-    .state { padding-top: 11px; }
-    .state__value { position: relative; }
     .state__value:nth-of-type(1)::before { content: "Target"; }
-    .state__value:nth-of-type(3)::before { content: "Actual"; }
-    .state__value:nth-of-type(1)::before,
-    .state__value:nth-of-type(3)::before {
-      position: absolute; bottom: 100%; left: 0;
-      font-size: 9px; line-height: 1.4; letter-spacing: .04em;
-      text-transform: uppercase; font-weight: 500; white-space: nowrap;
-      color: var(--secondary-text-color);
-    }
 ```
 
-Ojo: `<mc-target-temperature>` **no** son los numeros, son las flechas de subir
-y bajar. Los elementos anidados montan despues que el card, asi que la
-inyeccion reintenta hasta encontrarlos.
+Nested elements mount after the card, so injection retries until it finds them.
 
-### Selector de modo (frio / calor)
+---
 
-Para equipos por IR que no tienen entidad `climate` y se manejan con un
-`input_boolean` por modo, `modes` dibuja un selector **Apagado / Frio / Calor**
-y muestra cual esta activo:
+## Troubleshooting
 
-```yaml
-type: custom:ac-room-card
-name: Pieza
-entity: input_boolean.ac_pieza
-modes:
-  - name: Frio
-    entity: input_boolean.ac_pieza
-    icon: mdi:snowflake
-  - name: Calor
-    entity: input_boolean.ac_pieza_heat
-    icon: mdi:fire
-power_entity: sensor.ac_pieza_potencia
-```
+**The visual editor says it is not available.** You almost certainly have the
+card loaded twice — check Settings → Dashboards → Resources for both a `/local/`
+and a `/hacsfiles/` entry, and delete one.
 
-Con un solo modo en la lista, el selector queda como un Apagado / Encendido.
+**An update does not seem to apply.** Same cause, or browser cache. Hard-reload
+with Ctrl+Shift+R.
 
-Al elegir un modo, el card **apaga primero los otros y despues prende el
-elegido**. El orden importa: si cada boolean dispara una escena IR, hacerlo al
-reves dejaria el equipo apagado, porque el "off" del modo anterior llegaria
-despues del "on" del nuevo.
+**The fan icon never changes colour.** Fixed in 0.14.0. Update.
 
-Con `modes` y sin `base_card`, el card no envuelve nada: dibuja el encabezado,
-el selector, la linea de datos y el temporizador. Si igual quieres un card
-arriba, pon un `base_card`.
+**Nothing shows next to the power reading.** Every element hides itself when its
+entity is missing. Check the entity IDs in the visual editor.
 
-> Cada boolean tiene que estar cableado a lo que realmente enciende el equipo
-> (una escena, un `remote.send_command`, lo que uses). El card cambia el
-> boolean; no sabe mandar IR por su cuenta.
+---
 
-### Sin entidad climate
-
-Para un equipo controlado por IR con un `input_boolean` en vez de una entidad
-`climate`, el card dibuja un `tile` arriba y mantiene las mismas filas:
-
-```yaml
-type: custom:ac-room-card
-entity: input_boolean.ac_javi
-name: Javi
-power_entity: sensor.ac_javi_potencia
-energy_today_entity: sensor.ac_javi_energy_daily
-window_entity: binary_sensor.javi_ventana_contact
-```
-
-## Licencia
-
-MIT. Ver [LICENSE](LICENSE).
-
-## Tests
+## Development
 
 ```bash
 node test/smoke.js
 ```
 
-Ejercita la logica de las filas (valores, unidades, entidades ausentes o
-`unavailable`, el aviso de ventana) con un shim minimo de DOM, sin navegador.
+131 assertions, no browser: a minimal DOM shim exercises value formatting,
+elements hiding when their entity is absent, unavailable sensors, window states
+and battery, fan toggling, timer countdown and service calls, and the visual
+editor's config round-trip.
+
+There is no build step. Edit `ac-room-card.js`, run the tests, commit.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

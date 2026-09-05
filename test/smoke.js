@@ -38,6 +38,10 @@ const hass = {
     "sensor.hoy":              { state: "0.85",  attributes: { unit_of_measurement: "kWh" } },
     "sensor.mes":              { state: "12.34", attributes: { unit_of_measurement: "kWh" } },
     "binary_sensor.ventana":   { state: "on",    attributes: {} },
+    "binary_sensor.v1":        { state: "off",   attributes: { friendly_name: "Norte" } },
+    "binary_sensor.v2":        { state: "off",   attributes: { friendly_name: "Sur" } },
+    "sensor.pila_ok":          { state: "85",    attributes: { friendly_name: "Pila Norte" } },
+    "sensor.pila_baja":        { state: "12",    attributes: { friendly_name: "Pila Sur" } },
     "sensor.caido":            { state: "unavailable", attributes: {} },
     "sensor.temp":             { state: "22.6000003814697", attributes: { unit_of_measurement: "\u00b0C" } },
     "input_number.mins":       { state: "60", attributes: { min: 0, max: 480, step: 30 } },
@@ -81,7 +85,7 @@ ok("energia combina hoy y mes",     c._rows.energy.querySelector(".value").textC
 ok("ventana en la MISMA fila que W", win() !== null && c._rows.window === undefined, "hay fila window aparte");
 ok("abierta -> clase open (rojo)",  win().className === "win open", win().className);
 ok("abierta -> icono window-open",  win().getAttribute("icon") === "mdi:window-open-variant", win().getAttribute("icon"));
-ok("tooltip dice Abierta",          win().getAttribute("title") === "Ventana: Abierta", win().getAttribute("title"));
+ok("tooltip lista la ventana y su estado", /Abierta/.test(win().getAttribute("title")), win().getAttribute("title"));
 ok("aviso apagado por defecto",     c._rows.warn.style.display === "none", c._rows.warn.style.display);
 ok("NO se dibuja la etiqueta Potencia", !/class="label"/.test(c._rows.power.innerHTML), c._rows.power.innerHTML);
 ok("fila principal marcada .main",  c._rows.power.className === "row main", c._rows.power.className);
@@ -111,7 +115,7 @@ hass.states["binary_sensor.ventana"].state = "on";
 
 console.log("\n--- caso 1c: sin ventana -> el icono se oculta");
 c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });
-ok("icono de ventana oculto", c._rows.power.querySelector(".win").style.display === "none", c._rows.power.querySelector(".win").style.display);
+ok("icono de ventana oculto", c._rows.power.querySelector(".winwrap").style.display === "none", c._rows.power.querySelector(".winwrap").style.display);
 ok("fila de potencia visible", c._rows.power.style.display === "", c._rows.power.style.display);
 
 console.log("\n--- caso 1d: ventana sin potencia -> la fila igual aparece");
@@ -162,7 +166,7 @@ ok("timer.start con 3600 s", calls[0].srv === "start" && calls[0].data.duration 
 console.log("\n--- caso 2: sin energia ni ventana (ej. Cocina/Oficina)");
 c = mk({ entity: "climate.dorm", power_entity: "sensor.pot" });
 ok("fila energia oculta",  c._rows.energy.style.display === "none", c._rows.energy.style.display);
-ok("icono ventana oculto", c._rows.power.querySelector(".win").style.display === "none", c._rows.power.querySelector(".win").style.display);
+ok("icono ventana oculto", c._rows.power.querySelector(".winwrap").style.display === "none", c._rows.power.querySelector(".winwrap").style.display);
 ok("fila potencia visible",c._rows.power.style.display === "", c._rows.power.style.display);
 ok("aviso oculto",         c._rows.warn.style.display === "none", c._rows.warn.style.display);
 
@@ -217,6 +221,44 @@ c._setMode(-1);
 ok("Apagado solo apaga, no prende nada", calls.length === 1 && calls[0].srv === "turn_off", calls);
 c = mk({ entity: "input_boolean.frio", modes: [{ name: "Frio", entity: "input_boolean.frio" }] });
 ok("sin ningun modo on, activo = -1", c._activeMode() === -1, c._activeMode());
+
+console.log("\n--- caso 7h: varias ventanas (verde / naranjo / rojo)");
+const W = () => c._rows.power.querySelector(".win");
+const setW = (a, b) => { hass.states["binary_sensor.v1"].state = a; hass.states["binary_sensor.v2"].state = b; };
+
+setW("off", "off");
+c = mk({ entity: "climate.dorm", window_entity: ["binary_sensor.v1", "binary_sensor.v2"] });
+ok("todas cerradas -> verde", W().className === "win closed", W().className);
+setW("on", "off");
+c = mk({ entity: "climate.dorm", window_entity: ["binary_sensor.v1", "binary_sensor.v2"] });
+ok("una de dos -> naranjo",   W().className === "win some", W().className);
+ok("el tooltip cuenta 1/2",   /\(1\/2\)/.test(W().getAttribute("title")), W().getAttribute("title"));
+ok("y lista cada ventana",    /Norte: Abierta/.test(W().getAttribute("title")) && /Sur: Cerrada/.test(W().getAttribute("title")), W().getAttribute("title"));
+setW("on", "on");
+c = mk({ entity: "climate.dorm", window_entity: ["binary_sensor.v1", "binary_sensor.v2"] });
+ok("todas abiertas -> rojo",  W().className === "win open", W().className);
+
+setW("on", "off");
+c = mk({ entity: "climate.dorm", window_entity: "binary_sensor.v1" });
+ok("una sola abierta -> rojo, nunca naranjo", W().className === "win open", W().className);
+c = mk({ entity: "climate.dorm", window_entity: "binary_sensor.v2" });
+ok("una sola cerrada -> verde", W().className === "win closed", W().className);
+c = mk({ entity: "climate.dorm" });
+ok("sin ventanas se oculta", c._rows.power.querySelector(".winwrap").style.display === "none", c._rows.power.querySelector(".winwrap").style.display);
+
+console.log("\n--- caso 7i: pila baja de un sensor de ventana");
+const DOT = () => c._rows.power.querySelector(".batdot");
+c = mk({ entity: "climate.dorm", window_entity: [
+  { entity: "binary_sensor.v1", battery: "sensor.pila_ok" },
+  { entity: "binary_sensor.v2", battery: "sensor.pila_baja" }] });
+ok("marca visible si alguna esta baja", DOT().style.display === "", DOT().style.display);
+ok("el tooltip dice cual y cuanto", /Pila Sur: 12%/.test(DOT().getAttribute("title")), DOT().getAttribute("title"));
+c = mk({ entity: "climate.dorm", window_entity: [{ entity: "binary_sensor.v1", battery: "sensor.pila_ok" }] });
+ok("sin pilas bajas no hay marca", DOT().style.display === "none", DOT().style.display);
+c = mk({ entity: "climate.dorm", battery_warn: 90,
+  window_entity: [{ entity: "binary_sensor.v1", battery: "sensor.pila_ok" }] });
+ok("el umbral es configurable (85 <= 90)", DOT().style.display === "", DOT().style.display);
+setW("off", "off");
 
 console.log("\n--- caso 7d: ventiladores");
 function mkF(cfg) {
@@ -378,6 +420,18 @@ const esq = ED.buildSchema({ fans: ["fan.uno", "fan.dos"] });
 ok("el esquema agrega los campos de nombre", JSON.stringify(esq).includes("fan_name_1"), "falta fan_name_1");
 const esqVacio = ED.buildSchema({});
 ok("sin ventiladores no agrega campos", !JSON.stringify(esqVacio).includes("fan_name_"), "sobran campos");
+
+// ventanas: el form aplana, y el battery de cada una sobrevive
+const cfgWin = { type:"custom:ac-room-card", entity:"climate.dorm",
+  window_entity: [{ entity:"binary_sensor.v1", battery:"sensor.pila_ok" }, "binary_sensor.v2"] };
+const flatW = ED.toForm(cfgWin);
+ok("el form recibe solo los entity_id de ventana",
+   JSON.stringify(flatW.window_entity) === JSON.stringify(["binary_sensor.v1","binary_sensor.v2"]), flatW.window_entity);
+const backW = ED.fromForm(cfgWin, flatW);
+ok("conserva el battery de la primera", backW.window_entity[0].battery === "sensor.pila_ok", backW.window_entity);
+ok("y la segunda sigue siendo string",  backW.window_entity[1] === "binary_sensor.v2", backW.window_entity);
+const sinWin = ED.fromForm(cfgWin, { ...flatW, window_entity: [] });
+ok("lista vacia quita las ventanas", sinWin.window_entity === undefined, sinWin.window_entity);
 
 const sinFans = ED.fromForm(cfgFans, { ...flatF, fans: [] });
 ok("lista vacia quita la clave", sinFans.fans === undefined, sinFans.fans);

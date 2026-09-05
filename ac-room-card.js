@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.14.0";
+const VERSION = "0.15.0";
 
 const T = {
   today: "Hoy",
@@ -24,6 +24,8 @@ const T = {
   isOn: "encendido",
   isOff: "apagado",
   speed: "Velocidad del ventilador",
+  windows: "Ventanas",
+  batLow: "pila baja",
   unavailable: "no disponible",
 };
 
@@ -322,24 +324,26 @@ class AcRoomCard extends HTMLElement {
     const L = cfg.labels;
 
     /* Fila unica: potencia y, pegado al lado, el simbolo de ventana.
-       Verde = cerrada, rojo = abierta, gris = sin dato. */
-    let windowOpen = false;
+       Verde todas cerradas, naranjo algunas, rojo todas, gris sin dato. */
     const win = this._rows.power.querySelector(".win");
-    if (!cfg.window_entity) {
-      win.style.display = "none";
+    const wrap = this._rows.power.querySelector(".winwrap");
+    const dot = this._rows.power.querySelector(".batdot");
+    const w = this._windowState();
+    let windowOpen = false;
+    if (!w.lista.length) {
+      wrap.style.display = "none";
     } else {
-      win.style.display = "";
-      const st = this._hass.states[cfg.window_entity];
-      if (!st || st.state === "unavailable" || st.state === "unknown") {
-        win.setAttribute("icon", "mdi:window-closed-variant");
-        win.className = "win unknown";
-        win.setAttribute("title", `${L.window}: ${L.unavailable}`);
-      } else {
-        windowOpen = st.state === "on";
-        win.setAttribute("icon", windowOpen ? "mdi:window-open-variant" : "mdi:window-closed-variant");
-        win.className = windowOpen ? "win open" : "win closed";
-        win.setAttribute("title", `${L.window}: ${windowOpen ? L.open : L.closed}`);
-      }
+      wrap.style.display = "";
+      windowOpen = w.abiertas > 0;
+      const CLASES = { closed: "win closed", some: "win some", all: "win open", unknown: "win unknown" };
+      win.className = CLASES[w.estado];
+      win.setAttribute("icon", windowOpen ? "mdi:window-open-variant" : "mdi:window-closed-variant");
+      const resumen = w.lista.length > 1 ? ` (${w.abiertas}/${w.conocidas})` : "";
+      win.setAttribute("title", `${L.window}${resumen}\n${w.detalle.join("\n")}`);
+
+      const bajos = this._batteryLow();
+      dot.style.display = bajos.length ? "" : "none";
+      if (bajos.length) dot.setAttribute("title", `${L.batLow}\n${bajos.join("\n")}`);
     }
 
     // Temperatura de la pieza, a la derecha del simbolo de ventana
@@ -391,7 +395,14 @@ class AcRoomCard extends HTMLElement {
 
     this._bindMoreInfo(this._rows.power.querySelector(".picon"), () => cfg.power_entity);
     this._bindMoreInfo(this._rows.power.querySelector(".value"), () => cfg.power_entity);
-    this._bindMoreInfo(this._rows.power.querySelector(".win"), () => cfg.window_entity);
+    this._bindMoreInfo(this._rows.power.querySelector(".win"), () => {
+      const w = this._windowState();
+      const abierta = w.lista.find((x) => {
+        const st = this._hass.states[x.entity];
+        return st && st.state === "on";
+      });
+      return (abierta || w.lista[0] || {}).entity;
+    });
     this._bindMoreInfo(this._rows.power.querySelector(".tempicon"), () => cfg.temp_entity);
     this._bindMoreInfo(this._rows.power.querySelector(".temp"), () => cfg.temp_entity);
 
@@ -399,6 +410,61 @@ class AcRoomCard extends HTMLElement {
     this._updateFans();
     this._updateModes();
     this._updateTimer();
+  }
+
+  /* ---------- ventanas ---------- */
+
+  _windowList() {
+    const w = this._config.window_entity;
+    if (!w) return [];
+    return (Array.isArray(w) ? w : [w])
+      .map((x) => (typeof x === "string" ? { entity: x } : x))
+      .filter((x) => x && x.entity);
+  }
+
+  /* closed = todas cerradas, some = algunas, all = todas abiertas.
+     Con una sola ventana `some` no puede ocurrir, asi que el naranjo
+     aparece solo cuando de verdad hay algo parcial. */
+  _windowState() {
+    const lista = this._windowList();
+    let abiertas = 0, conocidas = 0;
+    const detalle = [];
+    for (const w of lista) {
+      const st = this._hass.states[w.entity];
+      const nombre = w.name || (st && st.attributes.friendly_name) || w.entity;
+      if (!st || st.state === "unavailable" || st.state === "unknown") {
+        detalle.push(`${nombre}: ${this._config.labels.unavailable}`);
+        continue;
+      }
+      conocidas++;
+      const abierta = st.state === "on";
+      if (abierta) abiertas++;
+      detalle.push(`${nombre}: ${abierta ? this._config.labels.open : this._config.labels.closed}`);
+    }
+    let estado = "unknown";
+    if (conocidas > 0) {
+      if (abiertas === 0) estado = "closed";
+      else if (abiertas === conocidas) estado = "all";
+      else estado = "some";
+    }
+    return { estado, abiertas, conocidas, detalle, lista };
+  }
+
+  /* Pila baja de cualquiera de los sensores de ventana. Es una falla
+     silenciosa: el sensor deja de reportar y la ventana parece cerrada. */
+  _batteryLow() {
+    const umbral = this._config.battery_warn === undefined ? 20 : Number(this._config.battery_warn);
+    const bajos = [];
+    for (const w of this._windowList()) {
+      if (!w.battery) continue;
+      const st = this._hass.states[w.battery];
+      if (!st) continue;
+      const v = parseFloat(st.state);
+      if (!Number.isNaN(v) && v <= umbral) {
+        bajos.push(`${w.name || (st.attributes.friendly_name || w.battery)}: ${v}%`);
+      }
+    }
+    return bajos;
   }
 
   /* ---------- interaccion ---------- */
@@ -698,9 +764,18 @@ class AcRoomCard extends HTMLElement {
         color: var(--state-icon-color, var(--paper-item-icon-color, #44739e)); }
       .row .temp { margin-left: 4px; font-weight: 500; }
       .row .win { margin-left: 10px; --mdc-icon-size: 20px; flex: 0 0 auto; }
+      .row .winwrap { position: relative; display: inline-flex; margin-left: 10px; }
+      .row .win { margin-left: 0; }
       .row .win.closed  { color: var(--success-color, #43a047); }
+      .row .win.some    { color: var(--warning-color, #ffa600); }
       .row .win.open    { color: var(--error-color, #db4437); }
       .row .win.unknown { color: var(--disabled-text-color, #9e9e9e); }
+      .row .batdot {
+        display: none; position: absolute; right: -1px; bottom: -1px;
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--error-color, #db4437);
+        box-shadow: 0 0 0 1.5px var(--card-background-color, #fff);
+      }
       .fanmode {
         display: inline-flex; align-items: center; gap: 4px; margin-left: 12px;
         color: var(--state-icon-color, #44739e);
@@ -790,6 +865,8 @@ class AcRoomCard extends HTMLElement {
 const EDITOR_LABELS = {
   entity: "Equipo (climate, o input_boolean si es por IR)",
   name: "Nombre que se muestra arriba",
+  window_entity: "Ventanas (verde todas cerradas, naranjo algunas, rojo todas)",
+  battery_warn: "Avisar pila baja bajo (%)",
   fans: "Ventiladores (uno va en la linea; dos o mas, en su propia fila)",
   fan_mode: "Mostrar la velocidad del ventilador del equipo",
   mode_cold_entity: "Boolean de FRIO (equipos sin entidad climate)",
@@ -845,7 +922,7 @@ const BASE_SCHEMA = [
     { name: "mode_cold_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
     { name: "mode_heat_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
   ]},
-  { name: "window_entity", selector: { entity: { domain: "binary_sensor" } } },
+  { name: "window_entity", selector: { entity: { domain: "binary_sensor", multiple: true } } },
   { name: "fans", selector: { entity: { domain: ["fan", "switch", "light"], multiple: true } } },
   { name: "", type: "grid", schema: [
     { name: "energy_today_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
@@ -857,6 +934,7 @@ const BASE_SCHEMA = [
   ]},
   { name: "timer_button_entity", selector: { entity: { domain: "input_button" } } },
   { name: "", type: "grid", schema: [
+    { name: "battery_warn", selector: { number: { min: 0, max: 100, step: 5, mode: "box" } } },
     { name: "fan_mode", selector: { boolean: {} } },
     { name: "show_warning", selector: { boolean: {} } },
   ]},
@@ -869,10 +947,12 @@ function toForm(config) {
   const t = c.timer || {};
   const out = {};
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
-                   "window_entity", "energy_today_entity", "energy_month_entity",
-                   "fan_mode", "show_warning"]) {
+                   "energy_today_entity", "energy_month_entity",
+                   "battery_warn", "fan_mode", "show_warning"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
+  const wins = normFans(c.window_entity);
+  if (wins.length) out.window_entity = wins.map((x) => x.entity);
   const fans = normFans(c.fans);
   if (fans.length) {
     out.fans = fans.map((f) => f.entity);
@@ -896,11 +976,23 @@ function fromForm(prev, data) {
   const d = { ...(data || {}) };
 
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
-                   "window_entity", "energy_today_entity", "energy_month_entity",
-                   "fan_mode", "show_warning"]) {
+                   "energy_today_entity", "energy_month_entity",
+                   "battery_warn", "fan_mode", "show_warning"]) {
     const v = d[k];
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;
+  }
+
+  // Ventanas: el form da entity_id sueltos; conserva el `battery` y el
+  // `name` de las que ya estaban configuradas como objeto.
+  const prevWins = normFans((prev || {}).window_entity);
+  if (Array.isArray(d.window_entity) && d.window_entity.length) {
+    out.window_entity = d.window_entity.map((id) => {
+      const old = prevWins.find((x) => x.entity === id);
+      return old && (old.battery || old.name) ? old : id;
+    });
+  } else {
+    delete out.window_entity;
   }
 
   // Ventiladores. Los nombres vienen en campos fan_name_<i>, que son por
