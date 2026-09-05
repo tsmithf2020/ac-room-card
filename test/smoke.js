@@ -502,7 +502,7 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
     const c = new ROOMS(); c.setConfig(cfg); c._hass = hass; c._build(); c._update(); return c;
   };
   const c9 = mkR({ rooms: [
-    { entity: "climate.conFan", name: "Pieza", power_entity: "sensor.pot",
+    { entity: "climate.conFan", name: "Pieza", power_entity: "sensor.pot", temp_entity: "sensor.temp",
       window_entity: ["binary_sensor.v1", "binary_sensor.v2"], fans: ["fan.uno"] },
     { entity: "input_boolean.frio", name: "IR",
       modes: [{ entity: "input_boolean.frio" }, { entity: "input_boolean.calor" }] },
@@ -510,7 +510,17 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   const f0 = c9._filas[0].fila, f1 = c9._filas[1].fila;
   ok("una fila por pieza",        c9._filas.length === 2, c9._filas.length);
   ok("nombre de la pieza",        f0.querySelector(".rname").textContent === "Pieza", f0.querySelector(".rname").textContent);
-  ok("temperaturas actual->objetivo", /21\.6.*26/.test(f0.querySelector(".temps").innerHTML), f0.querySelector(".temps").innerHTML);
+  ok("target = la consigna del equipo", f0.querySelector(".tgt").textContent === "26\u00b0", f0.querySelector(".tgt").textContent);
+  ok("actual = lo que mide el equipo",   f0.querySelector(".act").textContent === "21.6\u00b0", f0.querySelector(".act").textContent);
+  ok("real  = el sensor de la pieza",    f0.querySelector(".real").textContent === "22.6\u00b0", f0.querySelector(".real").textContent);
+  ok("las tres son distintas entre si",
+     new Set([f0.querySelector(".tgt").textContent, f0.querySelector(".act").textContent,
+              f0.querySelector(".real").textContent]).size === 3,
+     [f0.querySelector(".tgt").textContent, f0.querySelector(".act").textContent, f0.querySelector(".real").textContent]);
+  const cSinReal = mkR({ rooms: [{ entity: "climate.conFan", name: "P" }] });
+  ok("sin temp_entity la columna real queda vacia",
+     cSinReal._filas[0].fila.querySelector(".real").textContent === "",
+     cSinReal._filas[0].fila.querySelector(".real").textContent);
   ok("potencia redondeada",       f0.querySelector(".pw").textContent === "1234 W", f0.querySelector(".pw").textContent);
   ok("ventana naranja si va 1/2", f0.querySelector(".win").className === "win some", f0.querySelector(".win").className);
   ok("climate encendido -> boton on", f0.querySelector(".pwr").className === "pwr on", f0.querySelector(".pwr").className);

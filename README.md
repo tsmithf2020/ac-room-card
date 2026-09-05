@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.19.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.20.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -422,9 +422,10 @@ A compact list — one line per room — for a phone dashboard, where six full c
 mean six screens of scrolling.
 
 ```
-⏻  Bedroom      21.6 → 26.0°   340 W   🪟  🌀
-⏻  Kitchen      18.0 → 20.0°     5 W   🪟
-⏻  Office       23.1            0 W        🌀
+              TARGET  ACTUAL   REAL   POWER
+⏻  Bedroom      26°    21.6°   22.4°   340 W
+⏻  Kitchen      20°    18.0°   19.1°     5 W
+⏻  Office       26°    23.1°     —       0 W
 ```
 
 ```yaml
@@ -481,7 +482,20 @@ that room's own config — so the line can stay readable on a phone and the deta
 is one tap away. Set `popup: false` on the card to get the more-info dialog
 instead.
 
-Temperatures read **current → target**. Windows and batteries use the same
+Three temperatures, deliberately kept apart:
+
+| Column | Where it comes from |
+|---|---|
+| **Target** | the unit's setpoint (`temperature`) |
+| **Actual** | what the **unit itself** measures (`current_temperature`) |
+| **Real** | your own room sensor (`temp_entity`) |
+
+The last two rarely agree — the unit measures inside its own casing, often a
+couple of degrees off from the middle of the room. Showing them side by side is
+the point. Rename them with `labels: {target, actual, real}`.
+
+The labels are drawn **once**, as a column header. Repeating them on every row
+would be noise. Windows and batteries use the same
 green/orange/red logic as the full card. Below 380 px the power column hides
 itself to keep the line readable.
 
@@ -495,7 +509,7 @@ you are aiming at a button.
 node test/smoke.js
 ```
 
-180 assertions, no browser: a minimal DOM shim exercises value formatting,
+184 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.19.1";
+const VERSION = "0.20.0";
 
 const T = {
   today: "Hoy",
@@ -16,6 +16,9 @@ const T = {
   open: "Abierta",
   closed: "Cerrada",
   warn: "Ventana abierta con el aire andando",
+  target: "Target",
+  actual: "Actual",
+  real: "Real",
   schedule: "Programar",
   cancel: "Cancelar",
   offIn: "Apaga en",
@@ -1139,6 +1142,9 @@ const RT = {
   open: "Abierta",
   closed: "Cerrada",
   batLow: "pila baja",
+  target: "Target",
+  actual: "Actual",
+  real: "Real",
   schedule: "Programar",
   cancel: "Cancelar",
   min: "min",
@@ -1226,18 +1232,25 @@ class AcRoomsCard extends HTMLElement {
     });
   }
 
-  /* actual → objetivo. Sin entidad climate, solo la temperatura de la pieza. */
+  /* Tres lecturas distintas y a proposito separadas:
+       target = la consigna del equipo
+       actual = lo que mide el propio equipo
+       real   = el sensor independiente de la pieza (temp_entity)
+     Los dos ultimos casi nunca coinciden: el equipo mide en su carcasa. */
   _temps(r) {
     const st = this._hass.states[r.entity];
-    const dec = (v) => (Number.isNaN(parseFloat(v)) ? null : Math.round(parseFloat(v) * 10) / 10);
-    let actual = null;
-    if (r.temp_entity && this._hass.states[r.temp_entity]) {
-      actual = dec(this._hass.states[r.temp_entity].state);
-    } else if (st && st.attributes.current_temperature !== undefined) {
-      actual = dec(st.attributes.current_temperature);
-    }
-    const objetivo = st && st.attributes.temperature !== undefined ? dec(st.attributes.temperature) : null;
-    return { actual, objetivo };
+    const dec = (v) => {
+      const n = parseFloat(v);
+      return Number.isNaN(n) ? null : Math.round(n * 10) / 10;
+    };
+    const attr = (k) => (st && st.attributes[k] !== undefined && st.attributes[k] !== null
+      ? dec(st.attributes[k]) : null);
+    const rs = r.temp_entity && this._hass.states[r.temp_entity];
+    return {
+      target: attr("temperature"),
+      actual: attr("current_temperature"),
+      real: rs && !["unavailable", "unknown"].includes(rs.state) ? dec(rs.state) : null,
+    };
   }
 
   /* Corriendo: cancela. Parado: arranca, apretando el input_button del
@@ -1326,6 +1339,24 @@ class AcRoomsCard extends HTMLElement {
     cont.className = "rooms";
     card.appendChild(cont);
 
+    // Las etiquetas van una vez como encabezado de columna. Repetirlas en
+    // cada una de las filas seria ruido puro.
+    const cols0 = this._cols();
+    if (cols0.has("temps")) {
+      const L0 = this._config.labels;
+      const head = document.createElement("div");
+      head.className = "room head";
+      head.innerHTML =
+        `<span class="pwrsp"></span><span class="rname"></span>` +
+        `<span class="temps"><span class="tgt"></span>` +
+        `<span class="act"></span><span class="real"></span></span>` +
+        (cols0.has("power") ? `<span class="pw"></span>` : "");
+      head.querySelector(".tgt").textContent = L0.target;
+      head.querySelector(".act").textContent = L0.actual;
+      head.querySelector(".real").textContent = L0.real;
+      cont.appendChild(head);
+    }
+
     // Ancho fijo para la columna de ventiladores segun la pieza que mas
     // tiene, para que el icono de ventana caiga siempre en el mismo x.
     const cols = this._cols();
@@ -1340,7 +1371,8 @@ class AcRoomsCard extends HTMLElement {
       fila.innerHTML =
         `<button class="pwr" title=""><ha-icon icon="mdi:power"></ha-icon></button>` +
         `<span class="rname"></span>` +
-        `<span class="temps"></span>` +
+        `<span class="temps"><span class="tgt"></span>` +
+        `<span class="act"></span><span class="real"></span></span>` +
         `<span class="pw"></span>` +
         `<button class="tmr"><ha-icon></ha-icon><span class="tleft"></span></button>` +
         `<span class="winwrap"><ha-icon class="win"></ha-icon>` +
@@ -1426,15 +1458,13 @@ class AcRoomsCard extends HTMLElement {
       fila.querySelector(".rname").textContent =
         r.name || (st && st.attributes.friendly_name) || r.entity;
 
-      const { actual, objetivo } = this._temps(r);
-      const tEl = fila.querySelector(".temps");
-      if (actual === null && objetivo === null) {
-        tEl.textContent = noExiste ? L.unavailable : "";
-      } else if (objetivo === null) {
-        tEl.textContent = `${actual} °`;
-      } else {
-        tEl.innerHTML = `${actual === null ? "–" : actual}<span class="arr">→</span>${objetivo}<span class="uom">°</span>`;
-      }
+      const t3 = this._temps(r);
+      const pon = (sel, v) => {
+        fila.querySelector(sel).textContent = v === null ? "" : `${v}°`;
+      };
+      pon(".tgt", t3.target);
+      pon(".act", t3.actual);
+      pon(".real", t3.real);
 
       const pEl = fila.querySelector(".pw");
       const ps = r.power_entity && this._hass.states[r.power_entity];
@@ -1505,6 +1535,7 @@ class AcRoomsCard extends HTMLElement {
         font-size: 16px; color: var(--primary-text-color);
       }
       .room + .room { border-top: 1px solid var(--divider-color, #e0e0e0); }
+      .room.head { border-top: none; }
       .room.gone { opacity: .4; }
       .pwr {
         flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
@@ -1517,11 +1548,20 @@ class AcRoomsCard extends HTMLElement {
       .rname { flex: 1 1 auto; min-width: 72px; cursor: pointer;
                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .room.on .rname { font-weight: 500; }
-      .temps { flex: 0 0 auto; width: 108px; text-align: right; cursor: pointer;
+      .temps { flex: 0 0 auto; display: inline-flex; cursor: pointer;
                font-variant-numeric: tabular-nums;
                color: var(--primary-text-color); white-space: nowrap; }
-      .temps .arr { margin: 0 3px; color: var(--secondary-text-color); }
-      .temps .uom { color: var(--secondary-text-color); margin-left: 1px; }
+      .temps > span { width: 52px; text-align: right; }
+      .temps .real { color: var(--primary-color, #03a9f4); font-weight: 500; }
+      .head {
+        min-height: 0; padding-top: 2px; padding-bottom: 2px;
+        font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
+        font-weight: 500; color: var(--secondary-text-color);
+      }
+      .head .temps > span, .head .pw { color: inherit; font-weight: 500; }
+      .head .pwrsp { flex: 0 0 auto; width: 42px; }
+      .head .rname { min-width: 72px; }
+      .room.head + .room { border-top: 1px solid var(--divider-color, #e0e0e0); }
       .pw { flex: 0 0 auto; cursor: pointer; width: 52px; text-align: right;
             color: var(--secondary-text-color); font-variant-numeric: tabular-nums;
             white-space: nowrap; }
@@ -1567,7 +1607,7 @@ class AcRoomsCard extends HTMLElement {
       }
       @media (max-width: 380px) {
         .room { gap: 7px; padding: 6px 10px; font-size: 15px; }
-        .temps { width: 96px; }
+        .temps > span { width: 44px; }
         .tmr { width: 54px; }
       }
     `;
