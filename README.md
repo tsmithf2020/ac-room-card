@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.20.2-blue.svg)
+![version](https://img.shields.io/badge/version-0.21.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -503,6 +503,27 @@ want to see. Windows and batteries use the same
 green/orange/red logic as the full card. Below 380 px the power column hides
 itself to keep the line readable.
 
+### Row colour by mode
+
+A running room tints its whole row: **light blue for cooling, orange for
+heating**, and a green tint for `dry`. Off rooms stay neutral. The power button
+picks up the same colour, so a glance down the list tells you what every unit is
+doing without reading anything.
+
+For rooms driven by `input_boolean` modes the mode is inferred from its name or
+entity id (`cool`/`frio`, `heat`/`calor`/`calef`). Say it explicitly when the
+names do not give it away:
+
+```yaml
+modes:
+  - entity: input_boolean.kids_ac
+    name: Cool
+    hvac: cool
+  - entity: input_boolean.kids_ac_heat
+    name: Heat
+    hvac: heat
+```
+
 `sort: active` puts running rooms on top. **Leave it out to keep your order** —
 otherwise rows jump around as rooms turn on and off, which is disorienting when
 you are aiming at a button.
@@ -513,7 +534,7 @@ you are aiming at a button.
 node test/smoke.js
 ```
 
-188 assertions, no browser: a minimal DOM shim exercises value formatting,
+198 assertions, no browser: a minimal DOM shim exercises value formatting,
 elements hiding when their entity is absent, unavailable sensors, window states
 and battery, fan toggling, timer countdown and service calls, and the visual
 editor's config round-trip.

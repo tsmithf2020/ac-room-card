@@ -65,6 +65,7 @@ const hass = {
     "fan.uno":                 { state: "on",  attributes: { friendly_name: "Vent 1" } },
     "fan.dos":                 { state: "off", attributes: { friendly_name: "Vent 2" } },
     "input_boolean.calor":     { state: "on",  attributes: {} },
+    "input_boolean.neutro":    { state: "on",  attributes: {} },
     "timer.t_idle":            { state: "idle",   attributes: {} },
     "timer.t_run":             { state: "active", attributes: { finishes_at: new Date(Date.now() + 2530 * 1000).toISOString() } },
   },
@@ -558,6 +559,40 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
      Number(c10._filas[1].fila.style.order) < Number(c10._filas[0].fila.style.order),
      [c10._filas[0].fila.style.order, c10._filas[1].fila.style.order]);
   hass.states["climate.conFan"].state = "cool";
+
+  console.log("\n  -- color de la fila segun el modo --");
+  hass.states["climate.modo"] = { state: "cool", attributes: {} };
+  const mode = (st) => { hass.states["climate.modo"].state = st;
+    return mkR({ rooms: [{ entity: "climate.modo", name: "M" }] })._filas[0].fila.className; };
+  ok("cool -> celeste",  /\bm-cool\b/.test(mode("cool")), mode("cool"));
+  ok("heat -> naranjo",  /\bm-heat\b/.test(mode("heat")), mode("heat"));
+  ok("dry  -> su propio tono", /\bm-dry\b/.test(mode("dry")), mode("dry"));
+  ok("off  -> sin color", !/\bm-/.test(mode("off")), mode("off"));
+  ok("unavailable -> sin color", !/\bm-/.test(mode("unavailable")), mode("unavailable"));
+
+  // por input_boolean se deduce del nombre
+  hass.states["input_boolean.calor"].state = "on";
+  hass.states["input_boolean.frio"].state = "off";
+  const ir = (modos) => mkR({ rooms: [{ entity: "input_boolean.frio", name: "IR", modes: modos }] })._filas[0].fila.className;
+  ok("modo llamado Calor -> naranjo",
+     /\bm-heat\b/.test(ir([{ entity: "input_boolean.frio", name: "Frio" }, { entity: "input_boolean.calor", name: "Calor" }])),
+     ir([{ entity: "input_boolean.frio", name: "Frio" }, { entity: "input_boolean.calor", name: "Calor" }]));
+  hass.states["input_boolean.calor"].state = "off";
+  hass.states["input_boolean.frio"].state = "on";
+  ok("modo llamado Frio -> celeste",
+     /\bm-cool\b/.test(ir([{ entity: "input_boolean.frio", name: "Frio" }, { entity: "input_boolean.calor", name: "Calor" }])),
+     ir([{ entity: "input_boolean.frio", name: "Frio" }, { entity: "input_boolean.calor", name: "Calor" }]));
+  ok("se puede declarar hvac a mano",
+     /\bm-heat\b/.test(ir([{ entity: "input_boolean.frio", name: "Uno", hvac: "heat" }])),
+     ir([{ entity: "input_boolean.frio", name: "Uno", hvac: "heat" }]));
+  const neutro = mkR({ rooms: [{ entity: "input_boolean.neutro", name: "N",
+    modes: [{ entity: "input_boolean.neutro", name: "Uno" }] }] })._filas[0].fila.className;
+  ok("nombre y entity que no dicen nada -> sin color", !/\bm-/.test(neutro), neutro);
+  ok("tambien se deduce del entity_id",
+     /\bm-cool\b/.test(ir([{ entity: "input_boolean.frio", name: "Uno" }])),
+     ir([{ entity: "input_boolean.frio", name: "Uno" }]));
+  hass.states["input_boolean.frio"].state = "off";
+  hass.states["input_boolean.calor"].state = "on";
 
   console.log("\n  -- temporizadores en la fila --");
   const c11 = mkR({ rooms: [

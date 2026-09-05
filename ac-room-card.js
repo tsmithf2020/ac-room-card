@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.20.2";
+const VERSION = "0.21.0";
 
 const T = {
   today: "Hoy",
@@ -1211,6 +1211,28 @@ class AcRoomsCard extends HTMLElement {
     return !!st && !["off", "unavailable", "unknown"].includes(st.state);
   }
 
+  /* Modo en marcha, para pintar la fila. Con entidad climate es su estado;
+     con modos por input_boolean se deduce del nombre o del entity_id, o se
+     puede declarar a mano con `hvac` en cada modo. */
+  _hvac(r) {
+    const modos = this._modos(r);
+    if (modos.length) {
+      const activo = modos.find((m) => {
+        const st = this._hass.states[m.entity];
+        return st && st.state === "on";
+      });
+      if (!activo) return null;
+      if (activo.hvac) return activo.hvac;
+      const txt = ((activo.name || "") + " " + activo.entity).toLowerCase();
+      if (/heat|calor|calef/.test(txt)) return "heat";
+      if (/cool|frio|fr\u00edo|cold/.test(txt)) return "cool";
+      return null;
+    }
+    const st = this._hass.states[r.entity];
+    if (!st || ["off", "unavailable", "unknown"].includes(st.state)) return null;
+    return st.state;
+  }
+
   _toggle(r) {
     const modos = this._modos(r);
     if (modos.length) {
@@ -1450,7 +1472,9 @@ class AcRoomsCard extends HTMLElement {
       const on = this._encendida(r);
       const noExiste = !st;
 
-      fila.className = "room" + (on ? " on" : "") + (noExiste ? " gone" : "");
+      const modo = this._hvac(r);
+      fila.className = "room" + (on ? " on" : "") + (noExiste ? " gone" : "") +
+        (modo ? " m-" + modo : "");
       const pwr = fila.querySelector(".pwr");
       pwr.className = on ? "pwr on" : "pwr";
       pwr.title = on ? "" : L.off;
@@ -1537,6 +1561,12 @@ class AcRoomsCard extends HTMLElement {
       .room + .room { border-top: 1px solid var(--divider-color, #e0e0e0); }
       .room.head { border-top: none; }
       .room.gone { opacity: .4; }
+      /* La fila entera se tine segun el modo en marcha. */
+      .room.m-cool { background: color-mix(in srgb, var(--info-color, #039be5) 13%, transparent); }
+      .room.m-heat { background: color-mix(in srgb, var(--warning-color, #ff9800) 15%, transparent); }
+      .room.m-dry  { background: color-mix(in srgb, var(--success-color, #43a047) 10%, transparent); }
+      .room.m-cool .pwr.on { background: var(--info-color, #039be5); }
+      .room.m-heat .pwr.on { background: var(--warning-color, #ff9800); }
       .pwr {
         flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
         width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
