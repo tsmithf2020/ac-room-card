@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.27.1";
+const VERSION = "0.28.0";
 
 const T = {
   today: "Hoy",
