@@ -819,6 +819,18 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
   c9._filas[0].btns[0]._ev.click({ stopPropagation() {} });
   ok("el ventilador de la fila togglea", calls[0].d === "homeassistant" && calls[0].srv === "toggle", calls[0]);
 
+  hass.states["fan.uno"].state = "on";
+  const cColorOn = mkR({ rooms: [{ entity: "climate.conFan", name: "P",
+    fans: [{ entity: "fan.uno", name: "Sol", color: "orange" }] }]});
+  ok("la lista compacta usa el color propio", cColorOn._filas[0].btns[0].style.color === "orange", cColorOn._filas[0].btns[0].style.color);
+  hass.states["fan.uno"].state = "off";
+  const cColorOff = mkR({ rooms: [{ entity: "climate.conFan", name: "P",
+    fans: [{ entity: "fan.uno", name: "Sol", color: "orange" }] }]});
+  ok("apagado NO usa el color propio",       cColorOff._filas[0].btns[0].style.color === "", cColorOff._filas[0].btns[0].style.color);
+  const cSinColor = mkR({ rooms: [{ entity: "climate.conFan", name: "P", fans: ["fan.uno"] }]});
+  ok("sin color propio no se pinta nada",    cSinColor._filas[0].btns[0].style.color === "", cSinColor._filas[0].btns[0].style.color);
+  hass.states["fan.uno"].state = "on";
+
   let ev = null;
   c9.dispatchEvent = (e) => { ev = e; return true; };
   const c9mi = mkR({ popup: false, rooms: [{ entity: "climate.conFan", name: "Pieza" }] });

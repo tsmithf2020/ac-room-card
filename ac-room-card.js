@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.32.0";
+const VERSION = "0.32.1";
 
 const T = {
   pwOn: "con corriente",
@@ -1913,6 +1913,9 @@ class AcRoomsCard extends HTMLElement {
         const fst = this._hass.states[b.dataset.entity];
         const fon = !!fst && fst.state === "on";
         b.className = fon ? "rfan on" : "rfan off";
+        // El color propio se guardaba en dataset y no se aplicaba nunca: en la
+        // lista quedaba el verde comun aunque la pieza pidiera otro color.
+        b.style.color = fon && b.dataset.color ? b.dataset.color : "";
         b.title = `${b.dataset.label}: ${!fst ? L.unavailable : fon ? "on" : "off"}`;
       }
     }
