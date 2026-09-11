@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.29.0";
+const VERSION = "0.30.0";
 
 const T = {
   today: "Hoy",
@@ -415,7 +415,7 @@ class AcRoomCard extends HTMLElement {
 
   /* ---------- datos ---------- */
 
-  _fmt(entityId) {
+  _fmt(entityId, decimals = null) {
     if (!entityId) return null;
     const st = this._hass.states[entityId];
     if (!st) return { text: this._config.labels.unavailable, missing: true };
@@ -423,7 +423,13 @@ class AcRoomCard extends HTMLElement {
       return { text: this._config.labels.unavailable, missing: true };
     }
     let text;
-    if (typeof this._hass.formatEntityState === "function") {
+    const num = Number(st.state);
+    if (decimals !== null && st.state !== "" && !Number.isNaN(num)) {
+      // Con `decimals` manda la tarjeta: formatEntityState respeta la precision
+      // de cada sensor y deja "24" al lado de "23.5".
+      const u = st.attributes.unit_of_measurement;
+      text = u ? `${num.toFixed(decimals)} ${u}` : num.toFixed(decimals);
+    } else if (typeof this._hass.formatEntityState === "function") {
       text = this._hass.formatEntityState(st);
     } else {
       const n = Number(st.state);
@@ -470,7 +476,7 @@ class AcRoomCard extends HTMLElement {
     // Temperatura de la pieza, a la derecha del simbolo de ventana
     const tIcon = this._rows.power.querySelector(".tempicon");
     const tVal = this._rows.power.querySelector(".temp");
-    const t = this._fmt(cfg.temp_entity);
+    const t = this._fmt(cfg.temp_entity, normDecimals(cfg.decimals));
     if (!t) {
       tIcon.style.display = "none";
       tVal.style.display = "none";
@@ -967,6 +973,7 @@ const EDITOR_LABELS = {
   icon: "Icono del encabezado (opcional)",
   power_entity: "Potencia",
   temp_entity: "Temperatura de la pieza",
+  decimals: "Decimales de temperatura (vacio = como venga el sensor)",
   lux_entity: "Luz de la pieza",
   window_entity: "Sensor de ventana",
   energy_today_entity: "Energia de hoy",
@@ -976,6 +983,14 @@ const EDITOR_LABELS = {
   timer_button_entity: "Boton que dispara tu automatizacion",
   show_warning: "Avisar por texto si la ventana esta abierta con el aire andando",
 };
+
+/* `decimals`: cuantos decimales llevan las temperaturas. Sin poner, o fuera
+   de 0-3, se vuelve al comportamiento de siempre. */
+function normDecimals(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= 3 ? n : null;
+}
 
 function normFans(list) {
   if (!list) return [];
@@ -1014,6 +1029,7 @@ const BASE_SCHEMA = [
   ]},
   { name: "", type: "grid", schema: [
     { name: "lux_entity", selector: { entity: { domain: "sensor", device_class: "illuminance" } } },
+    { name: "decimals", selector: { number: { min: 0, max: 3, step: 1, mode: "box" } } },
   ]},
   { name: "", type: "grid", schema: [
     { name: "mode_cold_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
@@ -1049,7 +1065,7 @@ function toForm(config) {
   const out = {};
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
                    "lux_entity", "energy_today_entity", "energy_month_entity",
-                   "battery_warn", "fan_mode", "fans_position", "show_warning"]) {
+                   "battery_warn", "fan_mode", "fans_position", "show_warning", "decimals"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
   const wins = normFans(c.window_entity);
@@ -1078,7 +1094,7 @@ function fromForm(prev, data) {
 
   for (const k of ["entity", "name", "icon", "power_entity", "temp_entity",
                    "lux_entity", "energy_today_entity", "energy_month_entity",
-                   "battery_warn", "fan_mode", "fans_position", "show_warning"]) {
+                   "battery_warn", "fan_mode", "fans_position", "show_warning", "decimals"]) {
     const v = d[k];
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;
@@ -1333,6 +1349,12 @@ class AcRoomsCard extends HTMLElement {
     });
   }
 
+  /* `decimals` de la pieza, o el de la tarjeta si la pieza no trae. */
+  _decimals(r) {
+    const propio = normDecimals(r.decimals);
+    return propio !== null ? propio : normDecimals(this._config.decimals);
+  }
+
   /* Tres lecturas distintas y a proposito separadas:
        target = la consigna del equipo
        actual = lo que mide el propio equipo
@@ -1340,9 +1362,11 @@ class AcRoomsCard extends HTMLElement {
      Los dos ultimos casi nunca coinciden: el equipo mide en su carcasa. */
   _temps(r) {
     const st = this._hass.states[r.entity];
+    const dm = this._decimals(r);
+    const p = 10 ** (dm === null ? 1 : dm);
     const dec = (v) => {
       const n = parseFloat(v);
-      return Number.isNaN(n) ? null : Math.round(n * 10) / 10;
+      return Number.isNaN(n) ? null : Math.round(n * p) / p;
     };
     const attr = (k) => (st && st.attributes[k] !== undefined && st.attributes[k] !== null
       ? dec(st.attributes[k]) : null);
@@ -1379,6 +1403,8 @@ class AcRoomsCard extends HTMLElement {
     const helpers = await window.loadCardHelpers();
     const cfg = { type: "custom:ac-room-card", ...r };
     delete cfg.popup;
+    // La pieza hereda los decimales de la lista si no trae los suyos.
+    if (cfg.decimals === undefined && this._config.decimals !== undefined) cfg.decimals = this._config.decimals;
     const card = await helpers.createCardElement(cfg);
     card.hass = this._hass;
     this._popupCard = card;
@@ -1613,8 +1639,9 @@ class AcRoomsCard extends HTMLElement {
         r.name || (st && st.attributes.friendly_name) || r.entity;
 
       const t3 = this._temps(r);
+      const dm = this._decimals(r);
       const pon = (sel, v) => {
-        fila.querySelector(sel).textContent = v === null ? "" : `${v}°`;
+        fila.querySelector(sel).textContent = v === null ? "" : `${dm === null ? v : v.toFixed(dm)}°`;
       };
       pon(".tgt", t3.target);
       pon(".act", t3.actual);
@@ -1818,6 +1845,7 @@ const ROOMS_LABELS = {
   sort: "Orden",
   popup: "Al tocar una pieza, abrir su tarjeta completa",
   exclude: "Piezas a excluir",
+  decimals: "Decimales de temperatura (vacio = hasta 1)",
 };
 
 class AcRoomsCardEditor extends HTMLElement {
@@ -1880,6 +1908,7 @@ class AcRoomsCardEditor extends HTMLElement {
           { value: "active", label: "Las encendidas primero" },
         ] } } },
         { name: "popup", selector: { boolean: {} } },
+        { name: "decimals", selector: { number: { min: 0, max: 3, step: 1, mode: "box" } } },
       ]},
     ];
   }
@@ -1893,7 +1922,7 @@ class AcRoomsCardEditor extends HTMLElement {
       this._form.addEventListener("value-changed", (ev) => {
         const d = { ...ev.detail.value };
         const cfg = { ...this._config, ...d, type: this._config.type || "custom:ac-rooms-card" };
-        for (const k of ["title", "discover_view", "columns", "exclude", "sort"]) {
+        for (const k of ["title", "discover_view", "columns", "exclude", "sort", "decimals"]) {
           const v = cfg[k];
           if (v === undefined || v === "" || v === null || (Array.isArray(v) && !v.length)) delete cfg[k];
         }
@@ -1911,7 +1940,7 @@ class AcRoomsCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = this._esquema(op);
     const d = { popup: this._config.popup !== false };
-    for (const k of ["title", "discover_view", "columns", "exclude", "sort"]) {
+    for (const k of ["title", "discover_view", "columns", "exclude", "sort", "decimals"]) {
       if (this._config[k] !== undefined) d[k] = this._config[k];
     }
     this._form.data = d;

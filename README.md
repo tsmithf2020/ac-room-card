@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.29.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.30.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -122,6 +122,7 @@ timer:
 | `power_entity` | string | no | Power sensor (W). |
 | `temp_entity` | string | no | Room temperature sensor. |
 | `lux_entity` | string | no | Room light sensor. The icon follows the level: moon under 10 lx, sun over 1000. |
+| `decimals` | number | no | Decimal places for the room temperature, `0`–`3`. With `1`, `24` shows as `24.0`. Unset, the sensor's own format is used. |
 | `window_entity` | string \| list | no | One or more window sensors — see [Windows](#windows). |
 | `battery_warn` | number | no | Low-battery threshold in %, default `20`. |
 | `fans` | list | no | Room fans — see [Fans](#fans). |
@@ -502,7 +503,12 @@ rather than typed.
 Or list them yourself. Each room takes **the same block as `ac-room-card`**, so
 you can copy a card's config straight in. Fields it uses: `entity`, `name`, `power_entity`,
 `temp_entity`, `window_entity` (with battery), `fans`, `modes`, `timer`,
-`battery_warn`.
+`battery_warn`, `decimals`.
+
+`decimals` also goes on the rooms card itself, for every row at once. Without
+it temperatures are rounded to at most one decimal, so `24` and `23.5` sit side
+by side; `decimals: 1` shows `24.0`. A room's own `decimals` wins, and the popup
+inherits the list's.
 
 A running timer shows its countdown in orange; tap to cancel. Idle, it is just
 an icon you tap to start — and it hides itself when the room is off, since there

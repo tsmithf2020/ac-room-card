@@ -60,6 +60,7 @@ const hass = {
     "sensor.pila_baja":        { state: "12",    attributes: { friendly_name: "Pila Sur" } },
     "sensor.caido":            { state: "unavailable", attributes: {} },
     "sensor.temp":             { state: "22.6000003814697", attributes: { unit_of_measurement: "\u00b0C" } },
+    "sensor.temp_entera":      { state: "24", attributes: { unit_of_measurement: "°C" } },
     "sensor.lux":              { state: "420", attributes: { unit_of_measurement: "lx" } },
     "sensor.lux_noche":        { state: "3",     attributes: { unit_of_measurement: "lx" } },
     "sensor.lux_tenue":        { state: "45",    attributes: { unit_of_measurement: "lx" } },
@@ -159,6 +160,21 @@ ok("y trae el valor", c._rows.power.querySelector(".lux").textContent === "420 l
 console.log("\n--- caso 1g: solo temperatura, sin potencia ni ventana");
 c = mk({ entity: "climate.dorm", temp_entity: "sensor.temp" });
 ok("fila visible solo con temp", c._rows.power.style.display === "", c._rows.power.style.display);
+
+console.log("--- caso 1g2: decimals fija los decimales de la temperatura");
+const tempTxt = (cfg) => mk({ entity: "climate.dorm", ...cfg })._rows.power.querySelector(".temp").textContent;
+ok("24 con decimals:1 -> 24.0",          tempTxt({ temp_entity: "sensor.temp_entera", decimals: 1 }) === "24.0 °C", tempTxt({ temp_entity: "sensor.temp_entera", decimals: 1 }));
+ok("22.6000003 con decimals:1 -> 22.6",  tempTxt({ temp_entity: "sensor.temp", decimals: 1 }) === "22.6 °C", tempTxt({ temp_entity: "sensor.temp", decimals: 1 }));
+ok("decimals:0 tambien vale",            tempTxt({ temp_entity: "sensor.temp_entera", decimals: 0 }) === "24 °C", tempTxt({ temp_entity: "sensor.temp_entera", decimals: 0 }));
+ok("decimals en texto ('1') tambien",    tempTxt({ temp_entity: "sensor.temp_entera", decimals: "1" }) === "24.0 °C", tempTxt({ temp_entity: "sensor.temp_entera", decimals: "1" }));
+ok("sin decimals queda como viene",      tempTxt({ temp_entity: "sensor.temp_entera" }) === "24 °C", tempTxt({ temp_entity: "sensor.temp_entera" }));
+ok("decimals fuera de rango se ignora",  tempTxt({ temp_entity: "sensor.temp_entera", decimals: 9 }) === "24 °C", tempTxt({ temp_entity: "sensor.temp_entera", decimals: 9 }));
+c = mk({ entity: "climate.dorm", power_entity: "sensor.pot", decimals: 1 });
+ok("decimals no toca la potencia", c._rows.power.querySelector(".value").textContent === "1234 W", c._rows.power.querySelector(".value").textContent);
+hass.formatEntityState = () => "formateado por HA";
+ok("decimals le gana a formatEntityState",         tempTxt({ temp_entity: "sensor.temp_entera", decimals: 1 }) === "24.0 °C", tempTxt({ temp_entity: "sensor.temp_entera", decimals: 1 }));
+ok("sin decimals sigue mandando formatEntityState", tempTxt({ temp_entity: "sensor.temp_entera" }) === "formateado por HA", tempTxt({ temp_entity: "sensor.temp_entera" }));
+delete hass.formatEntityState;
 
 console.log("\n--- caso 1b: ventana cerrada -> verde");
 hass.states["binary_sensor.ventana"].state = "off";
@@ -617,6 +633,11 @@ ok("borrar ventana quita la clave", cleared.window_entity === undefined, cleared
 ok("borrar timer quita el bloque",  cleared.timer === undefined, cleared);
 ok("y aun asi conserva base_card",  !!cleared.base_card, cleared.base_card);
 ok("no toca lo que no maneja",      cleared.power_entity === "sensor.pot", cleared.power_entity);
+const cfgDec = { type: "custom:ac-room-card", entity: "climate.dorm", decimals: 1, base_card: { type: "custom:mini-climate" } };
+ok("toForm lleva decimals",             ED.toForm(cfgDec).decimals === 1, ED.toForm(cfgDec));
+ok("decimals sobrevive el ida y vuelta", ED.fromForm(cfgDec, ED.toForm(cfgDec)).decimals === 1, ED.fromForm(cfgDec, ED.toForm(cfgDec)));
+ok("decimals 0 NO se borra",            ED.fromForm(cfgDec, { ...ED.toForm(cfgDec), decimals: 0 }).decimals === 0, ED.fromForm(cfgDec, { ...ED.toForm(cfgDec), decimals: 0 }));
+ok("vaciar decimals quita la clave",    ED.fromForm(cfgDec, { ...ED.toForm(cfgDec), decimals: undefined }).decimals === undefined, "sigue ahi");
 
 console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
 {
@@ -651,6 +672,17 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
      cSinReal._filas[0].fila.querySelector(".real").textContent === "",
      cSinReal._filas[0].fila.querySelector(".real").textContent);
   ok("potencia redondeada",       f0.querySelector(".pw").textContent === "1234 W", f0.querySelector(".pw").textContent);
+  const cDec = mkR({ decimals: 1, rooms: [
+    { entity: "climate.conFan", name: "Lista", temp_entity: "sensor.temp_entera" },
+    { entity: "climate.conFan", name: "Propia", temp_entity: "sensor.temp_entera", decimals: 0 },
+  ]});
+  const dA = cDec._filas[0].fila, dB = cDec._filas[1].fila;
+  ok("decimals:1 -> target 26.0", dA.querySelector(".tgt").textContent === "26.0°", dA.querySelector(".tgt").textContent);
+  ok("decimals:1 -> actual 21.6", dA.querySelector(".act").textContent === "21.6°", dA.querySelector(".act").textContent);
+  ok("decimals:1 -> real 24.0",   dA.querySelector(".real").textContent === "24.0°", dA.querySelector(".real").textContent);
+  ok("la pieza puede traer los suyos",
+     dB.querySelector(".tgt").textContent === "26°" && dB.querySelector(".act").textContent === "22°",
+     [dB.querySelector(".tgt").textContent, dB.querySelector(".act").textContent]);
 
   // Columna de luz: apagada por defecto, porque casi ninguna pieza la tiene y
   // una columna vacia en todas las filas solo roba ancho en el telefono.
@@ -849,6 +881,15 @@ const orden = ['class="temps"','class="pw"','class="tmr"','class="winwrap"','cla
     ok("el overlay queda montado",      !!c14._overlay, c14._overlay);
     c14._closePopup();
     ok("cerrar lo desmonta",            c14._overlay === null, c14._overlay);
+    const c14d = mkR({ decimals: 1, rooms: [{ entity: "climate.conFan", name: "Pieza" }] });
+    await c14d._openPopup(c14d._config.rooms[0]);
+    ok("el popup hereda decimals de la lista", creado.decimals === 1, creado);
+    c14d._closePopup();
+    const c14e = mkR({ decimals: 1, rooms: [{ entity: "climate.conFan", name: "Pieza", decimals: 0 }] });
+    await c14e._openPopup(c14e._config.rooms[0]);
+    ok("pero no pisa los de la pieza", creado.decimals === 0, creado);
+    ok("y no ensucia la config original", c14d._config.rooms[0].decimals === undefined, c14d._config.rooms[0]);
+    c14e._closePopup();
   })().then(() => {
 
   try { new ROOMS().setConfig({}); ok("sin rooms NO lanza: descubre solo", true, ""); }
