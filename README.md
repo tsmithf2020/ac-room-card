@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.31.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.31.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -148,7 +148,7 @@ timer:
 power_switch: switch.bedroom_ac_plug
 ```
 
-The plug that feeds the unit gets its own icon on the data row: normal while
+The plug that feeds the unit gets its own icon on the data row: green while
 there is power, red when it is cut. **Cutting takes two taps** — the first arms
 the icon, which blinks orange for five seconds, and the second one cuts.
 Restoring power never asks. Cutting power to a running air conditioner is not

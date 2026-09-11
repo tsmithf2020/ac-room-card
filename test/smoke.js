@@ -411,6 +411,10 @@ c = mkP({ entity: "climate.dorm", power_entity: "sensor.pot", power_switch: "swi
 ok("dibuja el boton del enchufe",     !!c._pwBtn, "no se dibujo");
 ok("va en su propio hueco",           c._rows.power.querySelector(".pwslot").children.length === 1, c._rows.power.querySelector(".pwslot").children.length);
 ok("con corriente -> clase on",       c._pwBtn.className === "pw on", c._pwBtn.className);
+const cssPw = c._style().textContent;
+ok("con corriente se pinta verde",    /\.pw\.on\s*\{\s*color: var\(--success-color/.test(cssPw), (cssPw.match(/\.pw\.on[^}]*\}/) || [])[0]);
+ok("cortada se pinta roja",           /\.pw\.cut\s*\{\s*color: var\(--error-color/.test(cssPw), (cssPw.match(/\.pw\.cut[^}]*\}/) || [])[0]);
+ok("armada se pinta naranja",         /\.pw\.armed\s*\{\s*color: var\(--warning-color/.test(cssPw), (cssPw.match(/\.pw\.armed[^}]*\}/) || [])[0]);
 ok("icono de enchufe conectado",      icoPw(c) === "mdi:power-plug", icoPw(c));
 calls.length = 0;
 c._pwBtn.click();

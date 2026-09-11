@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.31.0";
+const VERSION = "0.31.1";
 
 const T = {
   pwOn: "con corriente",
@@ -984,7 +984,7 @@ class AcRoomCard extends HTMLElement {
         border: none; background: transparent; padding: 0;
       }
       .pw ha-icon { --mdc-icon-size: 20px; color: inherit; }
-      .pw.on  { color: var(--state-icon-color, var(--paper-item-icon-color, #44739e)); }
+      .pw.on  { color: var(--success-color, #43a047); }
       .pw.cut { color: var(--error-color, #db4437); }
       /* Armado: parpadea en naranjo mientras espera el segundo toque. */
       .pw.armed { color: var(--warning-color, #ffa600); animation: acrc-blink 1s steps(2, start) infinite; }
