@@ -7,9 +7,12 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.30.0";
+const VERSION = "0.31.0";
 
 const T = {
+  pwOn: "con corriente",
+  pwOff: "sin corriente, toca para reponer",
+  pwConfirm: "toca otra vez para CORTAR la corriente",
   today: "Hoy",
   month: "Mes",
   window: "Ventana",
@@ -296,6 +299,13 @@ class AcRoomCard extends HTMLElement {
       this._fanBtns = [];  // la fila va despues del temporizador
     }
 
+    const pw = this._powerSwitch();
+    if (pw) {
+      const slot = this._rows.power.querySelector(".pwslot");
+      this._pwBtn = this._makePowerBtn(pw);
+      if (slot) slot.appendChild(this._pwBtn);
+    }
+
     if (cfg.timer && cfg.timer.entity) {
       const t = document.createElement("div");
       t.className = "timerrow";
@@ -354,7 +364,8 @@ class AcRoomCard extends HTMLElement {
           `<ha-icon class="luxicon" icon="mdi:brightness-5"></ha-icon>` +
           `<span class="lux"></span>` +
           `<span class="fanslot"></span>` +
-          `<span class="fmslot"></span>`
+          `<span class="fmslot"></span>` +
+          `<span class="pwslot"></span>`
         : "");
     parent.appendChild(row);
     return row;
@@ -557,6 +568,7 @@ class AcRoomCard extends HTMLElement {
 
     this._updateFanMode();
     this._updateFans();
+    this._updatePowerSwitch();
     this._updateModes();
     this._updateTimer();
   }
@@ -640,6 +652,83 @@ class AcRoomCard extends HTMLElement {
       // Sin nombre visible: el tooltip es lo que distingue un ventilador de otro
       b.title = `${b.dataset.label}: ${!st ? L.unavailable : on ? L.isOn : L.isOff}`;
     }
+  }
+
+  /* ---------- corte de corriente ---------- */
+
+  /* `power_switch`: el enchufe o rele que alimenta al equipo. Acepta un
+     entity_id suelto o un objeto {entity, name, icon, icon_off, confirm}.
+     Cortar la corriente a un aire andando no es lo mismo que apagar una luz,
+     asi que por defecto pide DOS toques; reponerla nunca pide confirmacion. */
+  _powerSwitch() {
+    const cfg = this._config.power_switch;
+    if (!cfg) return null;
+    const o = typeof cfg === "string" ? { entity: cfg } : cfg;
+    return o && o.entity ? o : null;
+  }
+
+  _makePowerBtn(pw) {
+    const b = document.createElement("button");
+    b.className = "pw";
+    b.dataset.entity = pw.entity;
+    const st = this._hass.states[pw.entity];
+    b.dataset.label = pw.name || (st && st.attributes.friendly_name) || pw.entity;
+    b.innerHTML = `<ha-icon></ha-icon>`;
+    b.addEventListener("click", (ev) => {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      this._powerClick();
+    });
+    return b;
+  }
+
+  _powerClick() {
+    const pw = this._powerSwitch();
+    if (!pw) return;
+    const st = this._hass.states[pw.entity];
+    if (!st || st.state === "unavailable" || st.state === "unknown") return;
+    const dominio = pw.entity.split(".")[0];
+    const desarmar = () => {
+      this._pwArmado = false;
+      if (this._pwTimer) { clearTimeout(this._pwTimer); this._pwTimer = null; }
+    };
+    if (st.state !== "on") {
+      desarmar();
+      this._hass.callService(dominio, "turn_on", { entity_id: pw.entity });
+      this._updatePowerSwitch();
+      return;
+    }
+    if (pw.confirm !== false && !this._pwArmado) {
+      this._pwArmado = true;
+      if (this._pwTimer) clearTimeout(this._pwTimer);
+      // Si no confirma, el boton vuelve solo a su estado normal.
+      this._pwTimer = setTimeout(() => { this._pwArmado = false; this._updatePowerSwitch(); }, 5000);
+      this._updatePowerSwitch();
+      return;
+    }
+    desarmar();
+    this._hass.callService(dominio, "turn_off", { entity_id: pw.entity });
+    this._updatePowerSwitch();
+  }
+
+  _updatePowerSwitch() {
+    if (!this._pwBtn) return;
+    const L = this._config.labels;
+    const pw = this._powerSwitch() || {};
+    const st = this._hass.states[this._pwBtn.dataset.entity];
+    const falta = !st || st.state === "unavailable" || st.state === "unknown";
+    const on = !!st && st.state === "on";
+    const armado = !!this._pwArmado && on;
+    this._pwBtn.className = "pw " + (falta ? "na" : armado ? "armed" : on ? "on" : "cut");
+    const ico = this._pwBtn.querySelector("ha-icon");
+    if (ico) {
+      ico.setAttribute("icon", armado ? "mdi:power-plug-off-outline"
+        : on ? (pw.icon || "mdi:power-plug") : (pw.icon_off || "mdi:power-plug-off"));
+    }
+    const nombre = this._pwBtn.dataset.label;
+    this._pwBtn.title = falta ? `${nombre}: ${L.unavailable}`
+      : armado ? `${nombre}: ${L.pwConfirm}`
+      : on ? `${nombre}: ${L.pwOn}`
+      : `${nombre}: ${L.pwOff}`;
   }
 
   /* ---------- velocidad del ventilador del equipo ---------- */
@@ -887,6 +976,21 @@ class AcRoomCard extends HTMLElement {
       .row .preslot:empty { display: none; }
       .row .fanslot { margin-left: 12px; display: inline-flex; gap: 10px; }
       .row .fanslot:empty { margin-left: 0; }
+      .row .pwslot { margin-left: 12px; display: inline-flex; }
+      .row .pwslot:empty { margin-left: 0; }
+      .pw {
+        display: inline-flex; align-items: center;
+        font: inherit; cursor: pointer;
+        border: none; background: transparent; padding: 0;
+      }
+      .pw ha-icon { --mdc-icon-size: 20px; color: inherit; }
+      .pw.on  { color: var(--state-icon-color, var(--paper-item-icon-color, #44739e)); }
+      .pw.cut { color: var(--error-color, #db4437); }
+      /* Armado: parpadea en naranjo mientras espera el segundo toque. */
+      .pw.armed { color: var(--warning-color, #ffa600); animation: acrc-blink 1s steps(2, start) infinite; }
+      .pw.na { opacity: .5; cursor: default; }
+      .pw:hover { opacity: .7; }
+      @keyframes acrc-blink { to { visibility: hidden; } }
       /* Sin marco ni fondo: al lado del rayo y del termometro, que son
          iconos pelados, un boton encajonado desentona. */
       .fan {
@@ -974,6 +1078,8 @@ const EDITOR_LABELS = {
   power_entity: "Potencia",
   temp_entity: "Temperatura de la pieza",
   decimals: "Decimales de temperatura (vacio = como venga el sensor)",
+  power_switch: "Enchufe que corta la corriente del equipo",
+  power_switch_confirm: "Pedir dos toques antes de cortar",
   lux_entity: "Luz de la pieza",
   window_entity: "Sensor de ventana",
   energy_today_entity: "Energia de hoy",
@@ -1032,6 +1138,10 @@ const BASE_SCHEMA = [
     { name: "decimals", selector: { number: { min: 0, max: 3, step: 1, mode: "box" } } },
   ]},
   { name: "", type: "grid", schema: [
+    { name: "power_switch", selector: { entity: { domain: ["switch", "light", "input_boolean"] } } },
+    { name: "power_switch_confirm", selector: { boolean: {} } },
+  ]},
+  { name: "", type: "grid", schema: [
     { name: "mode_cold_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
     { name: "mode_heat_entity", selector: { entity: { domain: ["input_boolean", "switch"] } } },
   ]},
@@ -1068,6 +1178,14 @@ function toForm(config) {
                    "battery_warn", "fan_mode", "fans_position", "show_warning", "decimals"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
+  const pw = c.power_switch;
+  if (pw) {
+    const o = typeof pw === "string" ? { entity: pw } : pw;
+    if (o.entity) {
+      out.power_switch = o.entity;
+      out.power_switch_confirm = o.confirm !== false;
+    }
+  }
   const wins = normFans(c.window_entity);
   if (wins.length) out.window_entity = wins.map((x) => x.entity);
   const fans = normFans(c.fans);
@@ -1099,6 +1217,20 @@ function fromForm(prev, data) {
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;
   }
+
+  // Enchufe: el form da el entity_id y el booleano de confirmacion. Se
+  // conserva lo que el formulario no maneja (name, icon, icon_off).
+  if (d.power_switch) {
+    const prevPw = (prev || {}).power_switch;
+    const base = typeof prevPw === "object" && prevPw ? { ...prevPw } : {};
+    base.entity = d.power_switch;
+    if (d.power_switch_confirm === false) base.confirm = false;
+    else delete base.confirm;
+    out.power_switch = Object.keys(base).length === 1 ? base.entity : base;
+  } else {
+    delete out.power_switch;
+  }
+  delete out.power_switch_confirm;
 
   // Ventanas: el form da entity_id sueltos; conserva el `battery` y el
   // `name` de las que ya estaban configuradas como objeto.

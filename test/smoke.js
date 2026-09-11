@@ -61,6 +61,9 @@ const hass = {
     "sensor.caido":            { state: "unavailable", attributes: {} },
     "sensor.temp":             { state: "22.6000003814697", attributes: { unit_of_measurement: "\u00b0C" } },
     "sensor.temp_entera":      { state: "24", attributes: { unit_of_measurement: "°C" } },
+    "switch.enchufe":          { state: "on",  attributes: { friendly_name: "Enchufe AC" } },
+    "switch.enchufe_cortado":  { state: "off", attributes: { friendly_name: "Enchufe Cortado" } },
+    "switch.enchufe_caido":    { state: "unavailable", attributes: {} },
     "sensor.lux":              { state: "420", attributes: { unit_of_measurement: "lx" } },
     "sensor.lux_noche":        { state: "3",     attributes: { unit_of_measurement: "lx" } },
     "sensor.lux_tenue":        { state: "45",    attributes: { unit_of_measurement: "lx" } },
@@ -114,7 +117,7 @@ ok("NO se dibuja la etiqueta Potencia", !/class="label"/.test(c._rows.power.inne
 ok("fila principal marcada .main",  c._rows.power.className === "row main", c._rows.power.className);
 // Guarda contra el bug de 0.15.0: si el markup no trae estos elementos,
 // _update() revienta en la primera linea y el card queda en blanco entero.
-for (const sel of [".picon", ".value", ".win", ".winwrap", ".batdot", ".tempicon", ".temp", ".luxicon", ".lux", ".fanslot", ".fmslot"]) {
+for (const sel of [".picon", ".value", ".win", ".winwrap", ".batdot", ".tempicon", ".temp", ".luxicon", ".lux", ".fanslot", ".fmslot", ".pwslot"]) {
   ok("la fila principal contiene " + sel, c._rows.power.querySelector(sel) !== null, c._rows.power.innerHTML);
 }
 
@@ -389,6 +392,59 @@ ok("acepta objeto con nombre propio", c._fanList()[0].name === "Techo", c._fanLi
 c = mkF({ entity: "climate.dorm" });
 ok("sin fans, sin botones", c._fanBtns === undefined, c._fanBtns);
 
+console.log("--- caso 7e: corte de corriente (power_switch)");
+function mkP(cfg) {
+  const c = new CARD(); c.setConfig(cfg); c._hass = hass;
+  const f = makeEl("div");
+  c._rows = { power: c._addRow(f, "mdi:flash", null, true), energy: c._addRow(f, "mdi:x", "Hoy"), warn: makeEl("div") };
+  const pw = c._powerSwitch();
+  if (pw) {
+    c._pwBtn = c._makePowerBtn(pw);
+    c._rows.power.querySelector(".pwslot").appendChild(c._pwBtn);
+  }
+  c._update(); c._tick(false);
+  return c;
+}
+const icoPw = (c) => c._pwBtn.querySelector("ha-icon").getAttribute("icon");
+
+c = mkP({ entity: "climate.dorm", power_entity: "sensor.pot", power_switch: "switch.enchufe" });
+ok("dibuja el boton del enchufe",     !!c._pwBtn, "no se dibujo");
+ok("va en su propio hueco",           c._rows.power.querySelector(".pwslot").children.length === 1, c._rows.power.querySelector(".pwslot").children.length);
+ok("con corriente -> clase on",       c._pwBtn.className === "pw on", c._pwBtn.className);
+ok("icono de enchufe conectado",      icoPw(c) === "mdi:power-plug", icoPw(c));
+calls.length = 0;
+c._pwBtn.click();
+ok("el primer toque NO corta",        calls.length === 0, calls);
+ok("queda armado y parpadeando",      c._pwBtn.className === "pw armed", c._pwBtn.className);
+ok("y el tooltip pide el 2do toque",  /otra vez/.test(c._pwBtn.title), c._pwBtn.title);
+c._pwBtn.click();
+ok("el segundo toque corta",          calls[0].d === "switch" && calls[0].srv === "turn_off" && calls[0].data.entity_id === "switch.enchufe", calls[0]);
+ok("y se desarma",                    c._pwArmado === false, c._pwArmado);
+
+c = mkP({ entity: "climate.dorm", power_switch: { entity: "switch.enchufe", confirm: false } });
+calls.length = 0; c._pwBtn.click();
+ok("con confirm:false corta al primer toque", calls.length === 1 && calls[0].srv === "turn_off", calls);
+
+c = mkP({ entity: "climate.dorm", power_switch: "switch.enchufe_cortado" });
+ok("sin corriente -> clase cut (rojo)", c._pwBtn.className === "pw cut", c._pwBtn.className);
+ok("icono de enchufe cortado",          icoPw(c) === "mdi:power-plug-off", icoPw(c));
+calls.length = 0; c._pwBtn.click();
+ok("reponer NO pide confirmacion",      calls.length === 1 && calls[0].srv === "turn_on", calls);
+
+c = mkP({ entity: "climate.dorm", power_switch: "switch.enchufe_caido" });
+ok("entidad caida -> clase na",         c._pwBtn.className === "pw na", c._pwBtn.className);
+calls.length = 0; c._pwBtn.click();
+ok("y el toque no llama a nadie",       calls.length === 0, calls);
+
+c = mkP({ entity: "climate.dorm", power_switch: { entity: "switch.enchufe", name: "Diferencial", icon: "mdi:flash-off" } });
+ok("acepta nombre propio en el tooltip", /^Diferencial:/.test(c._pwBtn.title), c._pwBtn.title);
+ok("y icono propio",                     icoPw(c) === "mdi:flash-off", icoPw(c));
+
+c = mkP({ entity: "climate.dorm", power_entity: "sensor.pot" });
+ok("sin power_switch no hay boton",   c._pwBtn === undefined, c._pwBtn);
+ok("y el hueco queda vacio",          c._rows.power.querySelector(".pwslot").children.length === 0, c._rows.power.querySelector(".pwslot").children.length);
+
+
 console.log("\n--- caso 7f: velocidad del ventilador del equipo");
 function mkFM(cfg) {
   const c = new CARD(); c.setConfig(cfg); c._hass = hass;
@@ -638,6 +694,16 @@ ok("toForm lleva decimals",             ED.toForm(cfgDec).decimals === 1, ED.toF
 ok("decimals sobrevive el ida y vuelta", ED.fromForm(cfgDec, ED.toForm(cfgDec)).decimals === 1, ED.fromForm(cfgDec, ED.toForm(cfgDec)));
 ok("decimals 0 NO se borra",            ED.fromForm(cfgDec, { ...ED.toForm(cfgDec), decimals: 0 }).decimals === 0, ED.fromForm(cfgDec, { ...ED.toForm(cfgDec), decimals: 0 }));
 ok("vaciar decimals quita la clave",    ED.fromForm(cfgDec, { ...ED.toForm(cfgDec), decimals: undefined }).decimals === undefined, "sigue ahi");
+const cfgPw = { type: "custom:ac-room-card", entity: "climate.dorm", power_switch: "switch.enchufe" };
+ok("toForm aplana el enchufe",        ED.toForm(cfgPw).power_switch === "switch.enchufe", ED.toForm(cfgPw));
+ok("y marca la confirmacion en si",   ED.toForm(cfgPw).power_switch_confirm === true, ED.toForm(cfgPw));
+ok("ida y vuelta lo deja como string", ED.fromForm(cfgPw, ED.toForm(cfgPw)).power_switch === "switch.enchufe", ED.fromForm(cfgPw, ED.toForm(cfgPw)));
+const sinConf = ED.fromForm(cfgPw, { ...ED.toForm(cfgPw), power_switch_confirm: false });
+ok("apagar la confirmacion guarda objeto", sinConf.power_switch.confirm === false && sinConf.power_switch.entity === "switch.enchufe", sinConf.power_switch);
+ok("el campo del form no se guarda",  sinConf.power_switch_confirm === undefined, sinConf);
+const cfgPwObj = { type: "custom:ac-room-card", entity: "climate.dorm", power_switch: { entity: "switch.enchufe", name: "Diferencial" } };
+ok("conserva el nombre al editar",    ED.fromForm(cfgPwObj, ED.toForm(cfgPwObj)).power_switch.name === "Diferencial", ED.fromForm(cfgPwObj, ED.toForm(cfgPwObj)).power_switch);
+ok("quitar el enchufe borra la clave", ED.fromForm(cfgPw, { ...ED.toForm(cfgPw), power_switch: "" }).power_switch === undefined, "sigue ahi");
 
 console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
 {

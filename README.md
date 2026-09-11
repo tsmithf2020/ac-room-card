@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.30.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.31.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -123,6 +123,7 @@ timer:
 | `temp_entity` | string | no | Room temperature sensor. |
 | `lux_entity` | string | no | Room light sensor. The icon follows the level: moon under 10 lx, sun over 1000. |
 | `decimals` | number | no | Decimal places for the room temperature, `0`–`3`. With `1`, `24` shows as `24.0`. Unset, the sensor's own format is used. |
+| `power_switch` | string \| map | no | The plug or relay feeding the unit, shown as its own icon on the data row. See [Cutting power](#cutting-power). |
 | `window_entity` | string \| list | no | One or more window sensors — see [Windows](#windows). |
 | `battery_warn` | number | no | Low-battery threshold in %, default `20`. |
 | `fans` | list | no | Room fans — see [Fans](#fans). |
@@ -138,6 +139,32 @@ timer:
 | `show_warning` | bool | no | Text banner when a window is open while the unit runs. Off by default — the red icon already says it. |
 | `features` | list | no | Passed to the built-in `thermostat`. Ignored when `base_card` is set. |
 | `labels` | map | no | Override any UI string. |
+
+---
+
+## Cutting power
+
+```yaml
+power_switch: switch.bedroom_ac_plug
+```
+
+The plug that feeds the unit gets its own icon on the data row: normal while
+there is power, red when it is cut. **Cutting takes two taps** — the first arms
+the icon, which blinks orange for five seconds, and the second one cuts.
+Restoring power never asks. Cutting power to a running air conditioner is not
+the same as flicking a light off, and the icon sits next to the fans.
+
+```yaml
+power_switch:
+  entity: switch.bedroom_ac_plug
+  name: Breaker        # shown in the tooltip
+  icon: mdi:power-plug
+  icon_off: mdi:power-plug-off
+  confirm: false       # cut on the first tap
+```
+
+Any toggleable entity works — `switch`, `light`, `input_boolean` — and the card
+calls `turn_on`/`turn_off` on its own domain.
 
 ---
 
