@@ -81,7 +81,7 @@ features:
 | `lux_entity` | string | no | Sensor de luz de la pieza. El icono sigue al nivel: luna bajo 10 lx, sol sobre 1000. |
 | `temp_entity` | string | no | Sensor de temperatura de la pieza. Se dibuja a la derecha del simbolo de ventana. |
 | `decimals` | number | no | Decimales de las temperaturas, de `0` a `3`. Con `1`, `24` se ve `24.0`. Sin ponerlo, la temperatura de la pieza sale con el formato del sensor. En `ac-rooms-card` vale para todas las filas; cada pieza puede traer el suyo y el popup lo hereda. |
-| `power_switch` | string \| map | no | Enchufe o rele que alimenta al equipo, con su propio icono en la linea de datos. Corta con **dos toques** (el primero arma y parpadea 5 s); reponer no pide confirmacion. Como objeto acepta `entity`, `name`, `icon`, `icon_off` y `confirm: false`. |
+| `power_switch` | string \| map | no | Enchufe o rele que alimenta al equipo, con su propio icono en la linea de datos. Corta con **dos toques** (el primero arma y parpadea 5 s); reponer no pide confirmacion. Como objeto acepta `entity`, `name`, `icon`, `icon_off` y `confirm: false`. En `ac-rooms-card` sale al lado de los W agregando `plug` a `columns`. |
 | `fan_mode` | bool | no | Muestra la velocidad del ventilador **del equipo** (`fan_modes` de la entidad `climate`) como desplegable en la misma linea. |
 | `fan_mode_names` | map | no | Renombra las velocidades, ej. `auto: Automatico`. |
 | `battery_warn` | number | no | Umbral de pila baja en %, por defecto `20`. |

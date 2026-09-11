@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.31.1";
+const VERSION = "0.32.0";
 
 const T = {
   pwOn: "con corriente",
@@ -661,10 +661,7 @@ class AcRoomCard extends HTMLElement {
      Cortar la corriente a un aire andando no es lo mismo que apagar una luz,
      asi que por defecto pide DOS toques; reponerla nunca pide confirmacion. */
   _powerSwitch() {
-    const cfg = this._config.power_switch;
-    if (!cfg) return null;
-    const o = typeof cfg === "string" ? { entity: cfg } : cfg;
-    return o && o.entity ? o : null;
+    return normPlug(this._config.power_switch);
   }
 
   _makePowerBtn(pw) {
@@ -1098,6 +1095,14 @@ function normDecimals(v) {
   return Number.isInteger(n) && n >= 0 && n <= 3 ? n : null;
 }
 
+/* `power_switch`: entity_id suelto u objeto {entity, name, icon, icon_off,
+   confirm}. Lo usan el card de pieza y la lista compacta. */
+function normPlug(cfg) {
+  if (!cfg) return null;
+  const o = typeof cfg === "string" ? { entity: cfg } : cfg;
+  return o && o.entity ? o : null;
+}
+
 function normFans(list) {
   if (!list) return [];
   return (Array.isArray(list) ? list : [list])
@@ -1357,6 +1362,9 @@ if (!customElements.get("ac-room-card-editor")) {
    ================================================================== */
 
 const RT = {
+  pwOn: "con corriente",
+  pwOff: "sin corriente, toca para reponer",
+  pwConfirm: "toca otra vez para CORTAR la corriente",
   off: "Apagado",
   unavailable: "no disponible",
   window: "Ventanas",
@@ -1417,8 +1425,9 @@ class AcRoomsCard extends HTMLElement {
      pieza siempre esta a un toque, en el popup. */
   _cols() {
     const c = this._config.columns;
-    // `lux` NO entra por defecto: la mayoria de las piezas no tiene sensor de
-    // luz y una columna vacia en todas las filas solo roba ancho en el telefono.
+    // `lux` y `plug` NO entran por defecto: la mayoria de las piezas no tiene
+    // sensor de luz ni enchufe declarado, y una columna vacia en todas las
+    // filas solo roba ancho en el telefono.
     return new Set(Array.isArray(c) && c.length ? c : ["temps", "power", "window", "timer", "fans"]);
   }
 
@@ -1526,6 +1535,63 @@ class AcRoomsCard extends HTMLElement {
       const secs = Math.round((mins ? Number(mins.state) : 0) * 60);
       if (secs > 0) this._hass.callService("timer", "start", { entity_id: t.entity, duration: secs });
     }
+  }
+
+  /* Enchufe de la pieza, en su propia columna al lado de los W. Mismo trato
+     que en el card completo: cortar pide dos toques (el estado armado vive en
+     el propio boton, porque hay uno por fila), reponer no pide nada. */
+  _plugClick(fila, r) {
+    const pw = normPlug(r.power_switch);
+    const b = fila.querySelector(".plug");
+    if (!pw || !b) return;
+    const st = this._hass.states[pw.entity];
+    if (!st || st.state === "unavailable" || st.state === "unknown") return;
+    const dominio = pw.entity.split(".")[0];
+    const desarmar = () => {
+      b._armado = false;
+      if (b._tmr) { clearTimeout(b._tmr); b._tmr = null; }
+    };
+    if (st.state !== "on") {
+      desarmar();
+      this._hass.callService(dominio, "turn_on", { entity_id: pw.entity });
+    } else if (pw.confirm !== false && !b._armado) {
+      b._armado = true;
+      if (b._tmr) clearTimeout(b._tmr);
+      b._tmr = setTimeout(() => { b._armado = false; this._updatePlug(fila, r); }, 5000);
+    } else {
+      desarmar();
+      this._hass.callService(dominio, "turn_off", { entity_id: pw.entity });
+    }
+    this._updatePlug(fila, r);
+  }
+
+  _updatePlug(fila, r) {
+    const b = fila.querySelector(".plug");
+    if (!b) return;
+    const L = this._config.labels;
+    const pw = normPlug(r.power_switch);
+    if (!pw) {
+      // Se reserva el hueco, como la ventana y el timer, para que la columna
+      // caiga en el mismo x en todas las filas.
+      b.style.visibility = "hidden";
+      return;
+    }
+    b.style.visibility = "";
+    const st = this._hass.states[pw.entity];
+    const falta = !st || st.state === "unavailable" || st.state === "unknown";
+    const on = !!st && st.state === "on";
+    const armado = !!b._armado && on;
+    b.className = "plug " + (falta ? "na" : armado ? "armed" : on ? "on" : "cut");
+    const ico = b.querySelector("ha-icon");
+    if (ico) {
+      ico.setAttribute("icon", armado ? "mdi:power-plug-off-outline"
+        : on ? (pw.icon || "mdi:power-plug") : (pw.icon_off || "mdi:power-plug-off"));
+    }
+    const nombre = pw.name || (st && st.attributes.friendly_name) || pw.entity;
+    b.title = falta ? `${nombre}: ${L.unavailable}`
+      : armado ? `${nombre}: ${L.pwConfirm}`
+      : on ? `${nombre}: ${L.pwOn}`
+      : `${nombre}: ${L.pwOff}`;
   }
 
   /* Abre la pieza completa en un ac-room-card sobre el dashboard, para no
@@ -1640,7 +1706,7 @@ class AcRoomsCard extends HTMLElement {
     /* El encabezado tiene que llevar los MISMOS huecos que las filas y en el
        mismo orden, o las columnas dejan de calzar. */
     const cols0 = this._cols();
-    if (["temps", "power", "lux", "timer", "window", "fans"].some((k) => cols0.has(k))) {
+    if (["temps", "power", "plug", "lux", "timer", "window", "fans"].some((k) => cols0.has(k))) {
       const L0 = this._config.labels;
       const head = document.createElement("div");
       head.className = "room head";
@@ -1650,6 +1716,7 @@ class AcRoomsCard extends HTMLElement {
           ? `<span class="temps"><span class="tgt"></span>` +
             `<span class="act"></span><span class="real"></span></span>` : "") +
         (cols0.has("power")  ? `<span class="pw"><ha-icon icon="mdi:flash"></ha-icon></span>` : "") +
+        (cols0.has("plug")   ? `<span class="plug"><ha-icon icon="mdi:power-plug"></ha-icon></span>` : "") +
         (cols0.has("lux")    ? `<span class="lx"><ha-icon icon="mdi:brightness-5"></ha-icon></span>` : "") +
         (cols0.has("timer")  ? `<span class="tmr"><ha-icon icon="mdi:timer-outline"></ha-icon></span>` : "") +
         (cols0.has("window") ? `<span class="winwrap"><ha-icon icon="mdi:window-closed-variant"></ha-icon></span>` : "") +
@@ -1680,6 +1747,7 @@ class AcRoomsCard extends HTMLElement {
         `<span class="temps"><span class="tgt"></span>` +
         `<span class="act"></span><span class="real"></span></span>` +
         `<span class="pw"></span>` +
+        `<button class="plug"><ha-icon></ha-icon></button>` +
         `<span class="lx"></span>` +
         `<button class="tmr"><ha-icon></ha-icon><span class="tleft"></span></button>` +
         `<span class="winwrap"><ha-icon class="win"></ha-icon>` +
@@ -1697,6 +1765,10 @@ class AcRoomsCard extends HTMLElement {
       fila.querySelector(".pw").addEventListener("click", (ev) => {
         ev.stopPropagation();
         moreInfo(this, r.power_entity || r.entity);
+      });
+      fila.querySelector(".plug").addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this._plugClick(fila, r);
       });
       fila.querySelector(".tmr").addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -1732,7 +1804,7 @@ class AcRoomsCard extends HTMLElement {
       }
       // Columnas apagadas: fuera del flujo, para que no reserven hueco.
       for (const [clave, sel] of [["temps", ".temps"], ["power", ".pw"],
-                                  ["lux", ".lx"],
+                                  ["lux", ".lx"], ["plug", ".plug"],
                                   ["window", ".winwrap"], ["timer", ".tmr"],
                                   ["fans", ".fans"]]) {
         if (!cols.has(clave)) fila.querySelector(sel).style.display = "none";
@@ -1783,6 +1855,8 @@ class AcRoomsCard extends HTMLElement {
       const ps = r.power_entity && this._hass.states[r.power_entity];
       pEl.textContent = ps && !["unavailable", "unknown"].includes(ps.state)
         ? `${Math.round(parseFloat(ps.state) || 0)} W` : "";
+
+      this._updatePlug(fila, r);
 
       const lEl = fila.querySelector(".lx");
       if (lEl) {
@@ -1904,6 +1978,16 @@ class AcRoomsCard extends HTMLElement {
       .pw { flex: 0 0 auto; cursor: pointer; width: 52px; text-align: right;
             color: var(--secondary-text-color); font-variant-numeric: tabular-nums;
             white-space: nowrap; }
+      .plug { flex: 0 0 auto; width: 26px; display: inline-flex; align-items: center;
+              justify-content: flex-start; border: none; background: transparent;
+              padding: 0; cursor: pointer; color: var(--secondary-text-color); }
+      .plug ha-icon { --mdc-icon-size: 24px; color: inherit; }
+      .plug.on  { color: var(--success-color, #43a047); }
+      .plug.cut { color: var(--error-color, #db4437); }
+      .plug.armed { color: var(--warning-color, #ffa600); animation: acrc-blink 1s steps(2, start) infinite; }
+      .plug.na { opacity: .5; cursor: default; }
+      .head .plug { display: inline-flex; align-items: center; justify-content: flex-start; color: inherit; }
+      @keyframes acrc-blink { to { visibility: hidden; } }
       .winwrap { position: relative; display: inline-flex; flex: 0 0 auto; width: 24px; }
       .win { --mdc-icon-size: 24px; cursor: pointer; }
       .win.closed  { color: var(--success-color, #43a047); }
@@ -2027,6 +2111,7 @@ class AcRoomsCardEditor extends HTMLElement {
       { name: "columns", selector: { select: { multiple: true, mode: "list", options: [
         { value: "temps", label: "Temperaturas" },
         { value: "power", label: "Potencia" },
+        { value: "plug", label: "Corte de corriente" },
         { value: "lux", label: "Luz" },
         { value: "window", label: "Ventanas" },
         { value: "timer", label: "Temporizador" },

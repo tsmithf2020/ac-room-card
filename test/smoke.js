@@ -754,7 +754,36 @@ console.log("\n--- caso 9: ac-rooms-card (vista compacta)");
      dB.querySelector(".tgt").textContent === "26°" && dB.querySelector(".act").textContent === "22°",
      [dB.querySelector(".tgt").textContent, dB.querySelector(".act").textContent]);
 
-  // Columna de luz: apagada por defecto, porque casi ninguna pieza la tiene y
+  console.log("\n  -- corte de corriente en la fila --");
+  const cPlug = mkR({ columns: ["temps", "power", "plug"], rooms: [
+    { entity: "climate.conFan", name: "Con enchufe", power_entity: "sensor.pot", power_switch: "switch.enchufe" },
+    { entity: "climate.conFan", name: "Cortada", power_switch: "switch.enchufe_cortado" },
+    { entity: "climate.conFan", name: "Sin enchufe" },
+  ]});
+  const g0 = cPlug._filas[0].fila, g1 = cPlug._filas[1].fila, g2 = cPlug._filas[2].fila;
+  ok("con corriente -> verde (clase on)", g0.querySelector(".plug").className === "plug on", g0.querySelector(".plug").className);
+  ok("el enchufe va DESPUES de los W",
+     g0.innerHTML.indexOf('class="plug"') > g0.innerHTML.indexOf('class="pw"'), g0.innerHTML);
+  ok("cortada -> clase cut",              g1.querySelector(".plug").className === "plug cut", g1.querySelector(".plug").className);
+  ok("sin enchufe el hueco se reserva",   g2.querySelector(".plug").style.visibility === "hidden", g2.querySelector(".plug").style.visibility);
+  calls.length = 0;
+  g0.querySelector(".plug")._ev.click({ stopPropagation() {} });
+  ok("el primer toque NO corta",          calls.length === 0, calls);
+  ok("queda armado",                      g0.querySelector(".plug").className === "plug armed", g0.querySelector(".plug").className);
+  g0.querySelector(".plug")._ev.click({ stopPropagation() {} });
+  ok("el segundo toque corta",            calls[0].d === "switch" && calls[0].srv === "turn_off" && calls[0].data.entity_id === "switch.enchufe", calls[0]);
+  calls.length = 0;
+  g1.querySelector(".plug")._ev.click({ stopPropagation() {} });
+  ok("reponer no pide confirmacion",      calls.length === 1 && calls[0].srv === "turn_on", calls);
+  const headPlug = g0.parentNode.children[0];
+  ok("el encabezado lleva el icono de enchufe", /mdi:power-plug/.test(headPlug.innerHTML), headPlug.innerHTML);
+  const cSinPlug = mkR({ columns: ["temps", "power"], rooms: [
+    { entity: "climate.conFan", name: "P", power_switch: "switch.enchufe" }]});
+  ok("sin la columna no se dibuja",
+     cSinPlug._filas[0].fila.querySelector(".plug").style.display === "none",
+     cSinPlug._filas[0].fila.querySelector(".plug").style.display);
+
+    // Columna de luz: apagada por defecto, porque casi ninguna pieza la tiene y
   // una columna vacia en todas las filas solo roba ancho en el telefono.
   ok("la columna de luz NO viene por defecto",
      f0.querySelector(".lx").style.display === "none", f0.querySelector(".lx").style.display);

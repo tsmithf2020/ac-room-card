@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.31.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.32.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -165,6 +165,9 @@ power_switch:
 
 Any toggleable entity works — `switch`, `light`, `input_boolean` — and the card
 calls `turn_on`/`turn_off` on its own domain.
+
+The compact list shows it too, right after the watts, by adding `plug` to its
+`columns`. Each room picks up the `power_switch` from its own card.
 
 ---
 
@@ -548,10 +551,11 @@ is nothing to schedule.
 | Power reading | More-info of the power sensor |
 | Window icon | More-info of the first open window |
 | Timer | Starts it (or cancels a running one) |
+| Plug icon | Cuts the room's power — two taps, same as on the full card |
 | Fan icons | Toggles that fan |
 
-`columns` picks what the line shows, from `temps`, `power`, `lux`, `window`, `timer`
-and `fans`. All of those except `lux` are on by default: most rooms have no
+`columns` picks what the line shows, from `temps`, `power`, `plug`, `lux`, `window`,
+`timer` and `fans`. All of those except `lux` and `plug` are on by default: most rooms have no
 light sensor, and an empty column on every row only steals width. On a phone
 `[temps, power]` reads best — room names stop being truncated, and everything
 else is one tap away in the popup.
