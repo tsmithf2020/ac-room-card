@@ -2419,10 +2419,10 @@ const ROOMS_LABELS = {
     base_view: "Vista de arriba en el popup (vacío = la de cada pieza)",
     add_room: "Agregar pieza: elige su equipo (o la escena de frío, si es por IR)",
     remove: "Quitar esta pieza",
-    auto: "Buscarlas en el dashboard (las tarjetas AC Room que tengas)",
-    manual: "Listarlas aquí, cada una con sus sensores",
+    auto: "Buscarlas en el panel",
+    manual: "Listarlas acá",
     noteManual: "Cada pieza se edita abajo con los mismos campos que la tarjeta AC Room.",
-    noteAuto: (n) => `Se agregan solas las tarjetas AC Room que encuentre (${n} ahora mismo). Para elegir los sensores aquí, cambia "Piezas" a la lista.`,
+    noteAuto: (n) => `Se agregan solas las tarjetas AC Room del panel (${n} ahora mismo). Para elegir los sensores acá, cambia "Piezas" a "Listarlas acá".`,
   },
   en: {
     title: "Title",
@@ -2436,10 +2436,10 @@ const ROOMS_LABELS = {
     base_view: "Top view in the popup (empty = each room's own)",
     add_room: "Add a room: pick its unit (or its cool scene, for IR units)",
     remove: "Remove this room",
-    auto: "Find them on the dashboard (your AC Room cards)",
-    manual: "List them here, each with its own sensors",
+    auto: "Find them on the dashboard",
+    manual: "List them here",
     noteManual: "Each room is edited below with the same fields as the AC Room card.",
-    noteAuto: (n) => `AC Room cards found on the dashboard are added automatically (${n} right now). To pick sensors here, switch "Rooms" to the list.`,
+    noteAuto: (n) => `AC Room cards on the dashboard are added automatically (${n} right now). To pick sensors here, switch "Rooms" to "List them here".`,
   },
 };
 

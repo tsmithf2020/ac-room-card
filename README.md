@@ -40,7 +40,7 @@ behaviour, translations and updates.
 | Card | What it is |
 |---|---|
 | `custom:ac-room-card` | One room, full detail. Wraps your climate card. |
-| `custom:ac-rooms-card` | Several rooms, one compact line each. Built for phones. |
+| `custom:ac-rooms-card` | Several rooms, one compact line each. Built for phones. See [AC Rooms Card](#ac-rooms-card). |
 
 Both ship in the same `.js`, so one install gives you both.
 
@@ -133,12 +133,14 @@ timer:
 | `energy_today_entity` | string | no | Energy used today. |
 | `energy_month_entity` | string | no | Energy used this month. |
 | `timer` | map | no | Built-in shutdown timer — see [Timer](#timer). |
-| `modes` | list | no | Cool/heat selector for units without a `climate` entity. |
+| `modes` | list | no | Cool/heat selector for units without a `climate` entity. Each mode is an `input_boolean`, `switch`, `scene`, `script`, `button` or `input_button`. See [Mode selector](#mode-selector-cool--heat). |
+| `off_entity` | string | no | The `scene`, `script` or button the **Off** button fires, for units whose modes are scenes. See [Mode selector](#mode-selector-cool--heat). |
+| `mode_buttons` | bool | no | Row of HVAC mode buttons under the built-in thermostat. On by default; `false` hides it. See [Mode buttons](#mode-buttons). |
 | `base_view` | string | no | What goes on top, pickable in the visual editor: `compact` (mini-climate with Target / Actual labels), `thermostat` (default) or `none`. See [Compact view](#compact-view). |
 | `base_card` | map \| `false` | no | Full config of the card to wrap. Wins over `base_view`. Defaults to the built-in `thermostat`; `false` draws nothing on top. |
 | `base_card_style` | string \| map | no | CSS injected **inside** the wrapped card's shadow DOM. |
 | `show_warning` | bool | no | Text banner when a window is open while the unit runs. Off by default — the red icon already says it. |
-| `features` | list | no | Passed to the built-in `thermostat`. Ignored when `base_card` is set. |
+| `features` | list | no | Passed to the built-in `thermostat`, instead of the mode buttons. Ignored when `base_card` is set. |
 | `labels` | map | no | Override any UI string. |
 
 ---
@@ -167,8 +169,8 @@ power_switch:
 Any toggleable entity works — `switch`, `light`, `input_boolean` — and the card
 calls `turn_on`/`turn_off` on its own domain.
 
-The compact list shows it too, right after the watts, by adding `plug` to its
-`columns`. Each room picks up the `power_switch` from its own card.
+**On the rooms card**, add `plug` to its `columns` and the icon shows right after
+the watts — see [Cutting power from the list](#cutting-power-from-the-list).
 
 ---
 
@@ -399,7 +401,16 @@ into your recorder.
 
 ## Mode selector (cool / heat)
 
-For IR units with no `climate` entity, driven by one `input_boolean` per mode:
+For IR units with no `climate` entity. `modes` draws **Off / Cool / Heat** and
+marks the active one. With a single mode it becomes a plain on/off.
+
+Each mode is one entity: an `input_boolean` or `switch`, or a `scene`, `script`,
+`button` or `input_button`.
+
+With `modes` and no `base_card` the card wraps nothing and draws itself
+completely.
+
+### One boolean per mode
 
 ```yaml
 type: custom:ac-room-card
@@ -414,20 +425,50 @@ modes:
     icon: mdi:fire
 ```
 
-Draws **Off / Cool / Heat** and marks the active one. With a single mode it
-becomes a plain on/off.
-
 Switching **turns the other booleans off first, then turns the chosen one on**.
 The order matters: if each boolean fires an IR scene, doing it the other way
 round leaves the unit off, because the previous mode's "off" arrives after the
 new mode's "on".
 
-With `modes` and no `base_card` the card wraps nothing and draws itself
-completely.
-
 > Each boolean must be wired to whatever actually drives the unit — a scene, a
 > `remote.send_command`, whatever you use. The card flips the boolean; it does
 > not know how to send IR.
+
+### One scene per mode
+
+If each mode is already a scene, a script or a button that sends the IR code,
+point the card straight at them. No helper booleans, no automation:
+
+```yaml
+type: custom:ac-room-card
+name: Living
+modes:
+  - name: Cool
+    entity: scene.living_ac_cool
+    icon: mdi:snowflake
+  - name: Heat
+    entity: scene.living_ac_heat
+    icon: mdi:fire
+off_entity: scene.living_ac_off
+power_entity: sensor.living_ac_power
+```
+
+Tapping a mode fires its entity. **Off** fires `off_entity`.
+
+Scenes, scripts and buttons have no on/off state, so the card shows as active
+the one fired **most recently**. Scenes and buttons keep the time of their last
+activation as their state; scripts have `last_triggered`. If `off_entity` is the
+most recent, the unit shows as off.
+
+- If every mode is a scene, script or button and there is no `off_entity`, the
+  **Off** button is hidden: there is nothing to fire.
+- Mixed lists work. A boolean that is on always wins.
+
+In the visual editor these are the **Cool mode**, **Heat mode** and **Turn off**
+fields.
+
+The rooms list uses the same thing: its power button fires the first mode to
+turn on, and `off_entity` to turn off.
 
 ---
 
@@ -443,7 +484,7 @@ Swaps the big thermostat dial for a slim
 on the same line. It is the look in the screenshot above, without writing the
 `base_card` and `base_card_style` blocks by hand.
 
-It is a dropdown in the visual editor (*Vista de arriba*), and a card added from
+It is a dropdown in the visual editor (*Top view*), and a card added from
 the UI starts on `compact` whenever mini-climate is installed. It needs
 mini-climate from HACS; without it the card falls back to the built-in
 thermostat instead of showing an error. `decimals` sets the precision of the
@@ -452,6 +493,23 @@ temperatures, one decimal by default.
 A hand-written `base_card` always wins, and a `base_card_style` of your own
 replaces the built-in labels. On the rooms card, `base_view` applies to the popup
 of every room that does not set its own.
+
+---
+
+## Mode buttons
+
+With the built-in thermostat on top (the default), the card shows Home
+Assistant's own row of mode buttons under the dial: off, heat, cool, dry, fan...
+It is the same row the native thermostat card shows with its
+`climate-hvac-modes` feature, and it only lists the modes the entity declares in
+its `hvac_modes`. Changing mode no longer means opening the more-info dialog.
+
+```yaml
+mode_buttons: false   # hide the row
+```
+
+It is also a toggle in the visual editor. If you set `features:` yourself, your
+list is used instead.
 
 ---
 
@@ -484,6 +542,14 @@ base_card_style:
 ```
 
 Nested elements mount after the card, so injection retries until it finds them.
+
+---
+
+## Language
+
+Every text on both cards, and both visual editors, follows the language of the
+Home Assistant user: Spanish when it is `es` (or any `es-*`), English for
+everything else. `labels` still overrides any string on the card.
 
 ---
 
@@ -551,14 +617,14 @@ exclude: [Garage, Terrace]
 Entries match a room's `name` or its `entity`. It applies to a hand-written
 `rooms` list too.
 
-**Both cards have a visual editor.** The rooms one offers your actual views in a
-dropdown and your actual rooms as checkboxes to exclude, so it is all pickable
-rather than typed.
+**Both cards have a visual editor**, and the rooms one can edit every room
+without the code editor — see [Editing rooms from the UI](#editing-rooms-from-the-ui).
 
 Or list them yourself. Each room takes **the same block as `ac-room-card`**, so
-you can copy a card's config straight in. Fields it uses: `entity`, `name`, `power_entity`,
-`temp_entity`, `window_entity` (with battery), `fans`, `modes`, `timer`,
-`battery_warn`, `decimals`.
+you can copy a card's config straight in. Fields it uses: `entity`, `name`,
+`power_entity`, `temp_entity`, `lux_entity`, `window_entity` (with battery),
+`fans`, `power_switch` (see [Cutting power from the list](#cutting-power-from-the-list)),
+`modes`, `off_entity`, `timer`, `battery_warn`, `decimals`.
 
 `decimals` also goes on the rooms card itself, for every row at once. Without
 it temperatures are rounded to at most one decimal, so `24` and `23.5` sit side
@@ -616,6 +682,45 @@ want to see. Windows and batteries use the same
 green/orange/red logic as the full card. Below 380 px the power column hides
 itself to keep the line readable.
 
+### Editing rooms from the UI
+
+The rooms card's visual editor has a **Rooms** selector with two options:
+
+- **Find them on the dashboard** — automatic discovery, as described above. No
+  `rooms` key is written. The editor offers your actual views in a dropdown and
+  your actual rooms as checkboxes to exclude.
+- **List them here** — the editor writes `rooms`. Each room is a collapsible
+  panel with **the same fields as the `ac-room-card` editor** (climate entity,
+  name, power sensor, temperature, lux, decimals, plug, windows, fans, modes,
+  timer...) and a button to remove it. The entity picker at the bottom adds a
+  room. For an IR unit with no `climate` entity, pick its cool scene, script or
+  button: the room is created with that mode, and you fill in the rest in its
+  panel.
+
+Switching to *List them here* fills the list with the rooms it had discovered,
+so you start from what you already have. Removing the last room goes back to
+*Find them on the dashboard*. There is no need to use the code editor anymore.
+
+### Cutting power from the list
+
+Give the room its `power_switch` and add `plug` to `columns` — it is off by
+default:
+
+```yaml
+type: custom:ac-rooms-card
+columns: [temps, power, plug]
+rooms:
+  - entity: climate.bedroom
+    name: Bedroom
+    power_entity: sensor.bedroom_ac_power
+    power_switch: switch.bedroom_ac_plug
+```
+
+The plug icon sits right after the watts. It cuts with two taps and restores
+with one, same as on the full card — see [Cutting power](#cutting-power). With
+discovery there is nothing to add to the rooms: each one brings the
+`power_switch` of its own card, so `columns` is all you set.
+
 ### Row colour by mode
 
 A running room tints its whole row: **light blue for cooling, orange for
@@ -644,9 +749,10 @@ you are aiming at a button.
 ## Development
 
 ```bash
-node test/smoke.js      # 227 assertions
-node test/discover.js   # 20 more, for discovery and the rooms editor
-node test/base_view.js  # the top view picked from the editor
+node test/smoke.js        # the room card: data line, windows, fans, timer, editor
+node test/discover.js     # discovery and the rooms editor
+node test/base_view.js    # the top view picked from the editor
+node test/modes_i18n.js   # scene/button modes, mode buttons and language
 ```
 
 No browser: a minimal DOM shim exercises value formatting,
