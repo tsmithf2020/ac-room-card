@@ -89,7 +89,8 @@ features:
 | `modes` | list | no | Selector de modo para equipos sin entidad `climate`. Ver abajo. |
 | `timer` | map | no | Temporizador de apagado integrado. Ver abajo. |
 | `show_warning` | bool | no | `false` por defecto. Si lo activas, agrega un aviso de texto cuando la ventana esta abierta *y* el aire andando. El icono rojo ya cubre el caso, por eso viene apagado. |
-| `base_card` | map | no | Config completa del card que va arriba. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
+| `base_view` | string | no | Lo que va arriba, elegible en el editor visual: `compact` (mini-climate con rotulos Target / Actual), `thermostat` (por defecto) o `none`. Ver [Vista compacta](#vista-compacta). |
+| `base_card` | map | no | Config completa del card que va arriba. Gana sobre `base_view`. Sirve para envolver cualquier card, propio o de HACS (`custom:mini-climate`, `custom:simple-thermostat`...). Si no lo pones, usa el `thermostat` integrado. |
 | `base_card_style` | string \| map | no | CSS que se inyecta **dentro** del shadow root del card envuelto. Como mapa `selector: css`, llega tambien a shadow roots anidados. |
 | `features` | list | no | Se pasa tal cual al `thermostat` integrado. Se ignora si usas `base_card`. |
 | `labels` | map | no | Sobrescribe los textos (`today`, `month`, `window`, `open`, `closed`, `warn`, `unavailable`). |
@@ -230,6 +231,27 @@ maneja la cuenta.
 La cuenta regresiva se calcula en el navegador desde `finishes_at`, con un
 `setInterval` que solo corre mientras el temporizador esta activo. No necesita
 un sensor de plantilla refrescando cada segundo ni escribe nada en el recorder.
+
+### Vista compacta
+
+```yaml
+base_view: compact
+```
+
+Cambia el dial grande del termostato por una fila delgada de
+[mini-climate](https://github.com/artem-sedykh/mini-climate-card), con rotulos
+chicos **TARGET** / **ACTUAL** sobre las dos temperaturas y la velocidad del
+ventilador del equipo en la misma linea. Es la vista de la captura de arriba,
+sin escribir a mano los bloques `base_card` y `base_card_style`.
+
+En el editor visual es el desplegable *Vista de arriba*, y un card agregado desde
+la UI parte en `compact` si mini-climate esta instalado. Necesita mini-climate de
+HACS; si no esta, el card cae al termostato integrado en vez de mostrar un error.
+`decimals` fija la precision de las temperaturas, un decimal por defecto.
+
+Un `base_card` escrito a mano siempre gana, y un `base_card_style` propio
+reemplaza los rotulos que trae. En `ac-rooms-card`, `base_view` vale para el popup
+de cada pieza que no traiga el suyo.
 
 ### Envolver otro card como base
 

@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.32.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.33.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -134,7 +134,8 @@ timer:
 | `energy_month_entity` | string | no | Energy used this month. |
 | `timer` | map | no | Built-in shutdown timer — see [Timer](#timer). |
 | `modes` | list | no | Cool/heat selector for units without a `climate` entity. |
-| `base_card` | map \| `false` | no | Full config of the card to wrap. Defaults to the built-in `thermostat`; `false` draws nothing on top. |
+| `base_view` | string | no | What goes on top, pickable in the visual editor: `compact` (mini-climate with Target / Actual labels), `thermostat` (default) or `none`. See [Compact view](#compact-view). |
+| `base_card` | map \| `false` | no | Full config of the card to wrap. Wins over `base_view`. Defaults to the built-in `thermostat`; `false` draws nothing on top. |
 | `base_card_style` | string \| map | no | CSS injected **inside** the wrapped card's shadow DOM. |
 | `show_warning` | bool | no | Text banner when a window is open while the unit runs. Off by default — the red icon already says it. |
 | `features` | list | no | Passed to the built-in `thermostat`. Ignored when `base_card` is set. |
@@ -430,6 +431,30 @@ completely.
 
 ---
 
+## Compact view
+
+```yaml
+base_view: compact
+```
+
+Swaps the big thermostat dial for a slim
+[mini-climate](https://github.com/artem-sedykh/mini-climate-card) row, with small
+**TARGET** / **ACTUAL** labels over the two temperatures and the unit's fan speed
+on the same line. It is the look in the screenshot above, without writing the
+`base_card` and `base_card_style` blocks by hand.
+
+It is a dropdown in the visual editor (*Vista de arriba*), and a card added from
+the UI starts on `compact` whenever mini-climate is installed. It needs
+mini-climate from HACS; without it the card falls back to the built-in
+thermostat instead of showing an error. `decimals` sets the precision of the
+temperatures, one decimal by default.
+
+A hand-written `base_card` always wins, and a `base_card_style` of your own
+replaces the built-in labels. On the rooms card, `base_view` applies to the popup
+of every room that does not set its own.
+
+---
+
 ## Wrapping another card
 
 ```yaml
@@ -538,7 +563,7 @@ you can copy a card's config straight in. Fields it uses: `entity`, `name`, `pow
 `decimals` also goes on the rooms card itself, for every row at once. Without
 it temperatures are rounded to at most one decimal, so `24` and `23.5` sit side
 by side; `decimals: 1` shows `24.0`. A room's own `decimals` wins, and the popup
-inherits the list's.
+inherits the list's. `base_view` works the same way for the popup.
 
 A running timer shows its countdown in orange; tap to cancel. Idle, it is just
 an icon you tap to start — and it hides itself when the room is off, since there
@@ -621,6 +646,7 @@ you are aiming at a button.
 ```bash
 node test/smoke.js      # 227 assertions
 node test/discover.js   # 20 more, for discovery and the rooms editor
+node test/base_view.js  # the top view picked from the editor
 ```
 
 No browser: a minimal DOM shim exercises value formatting,

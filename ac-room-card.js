@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.32.1";
+const VERSION = "0.33.0";
 
 const T = {
   pwOn: "con corriente",
@@ -122,6 +122,79 @@ function luxIcon(st) {
   return "mdi:white-balance-sunny";
 }
 
+/* ---------- vista de arriba ---------- */
+
+/* `base_view` elige lo que va arriba sin escribir un base_card a mano:
+     compact    -> mini-climate con los rotulos TARGET / ACTUAL
+     thermostat -> el termostato integrado (por defecto, como siempre)
+     none       -> nada, solo el encabezado y las filas
+   Un `base_card` escrito en YAML siempre gana ("custom"). */
+const BASE_VIEWS = ["compact", "thermostat", "none"];
+const MINI_CLIMATE = "mini-climate";
+
+const COMPACT_STYLE = {
+  "": `
+.mc-climate { padding-top: 0 !important; padding-bottom: 0 !important; }
+.entity__controls { margin-top: calc(var(--mc-unit) * -.35); }
+`,
+  "mc-temperature": `
+.state { padding-top: 12px; }
+.state__value { position: relative; }
+.state__value:nth-of-type(1)::before { content: "Target"; }
+.state__value:nth-of-type(3)::before { content: "Actual"; }
+.state__value:nth-of-type(1)::before,
+.state__value:nth-of-type(3)::before {
+  position: absolute; bottom: calc(100% + 1px); left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px; line-height: 1; letter-spacing: .04em;
+  text-transform: uppercase; font-weight: 500; white-space: nowrap;
+  color: var(--secondary-text-color);
+}
+`,
+};
+
+function resolveView(cfg) {
+  const c = cfg || {};
+  if (c.base_card && typeof c.base_card === "object") return "custom";
+  if (c.base_card === false) return "none";
+  return BASE_VIEWS.includes(c.base_view) ? c.base_view : "thermostat";
+}
+
+function hasElement(tag) {
+  return typeof customElements !== "undefined" && !!customElements.get(tag);
+}
+
+/* La misma config de mini-climate que llevan a mano las tarjetas del panel. */
+function compactBaseCard(cfg) {
+  const dm = normDecimals(cfg.decimals);
+  const out = {
+    type: `custom:${MINI_CLIMATE}`,
+    entity: cfg.entity,
+    secondary_info: {},
+    fan_mode: { hide: false, location: "main" },
+    hide_icon: true,
+    group: true,
+    temperature: { fixed: dm === null ? 1 : dm },
+  };
+  // Con encabezado propio, mini-climate no repite el nombre debajo.
+  if (cfg.name) out.name = " ";
+  return out;
+}
+
+/* Los recursos de HACS cargan en paralelo: mini-climate puede definirse
+   despues que este archivo. Se espera un poco y, si no llega, se cae al
+   termostato integrado en vez de dejar un card de error. */
+function whenElement(tag, ms = 3000) {
+  if (hasElement(tag)) return Promise.resolve(true);
+  if (typeof customElements === "undefined" || typeof customElements.whenDefined !== "function") {
+    return Promise.resolve(false);
+  }
+  return Promise.race([
+    customElements.whenDefined(tag).then(() => true),
+    new Promise((r) => setTimeout(() => r(false), ms)),
+  ]);
+}
+
 class AcRoomCard extends HTMLElement {
   constructor() {
     super();
@@ -137,7 +210,10 @@ class AcRoomCard extends HTMLElement {
 
   static getStubConfig(hass, entities) {
     const climate = (entities || []).find((e) => e.startsWith("climate."));
-    return { entity: climate || "climate.example" };
+    const stub = { entity: climate || "climate.example" };
+    // Agregada desde la UI, sale igual que las del panel si hay mini-climate.
+    if (hasElement(MINI_CLIMATE)) stub.base_view = "compact";
+    return stub;
   }
 
   setConfig(config) {
@@ -159,6 +235,7 @@ class AcRoomCard extends HTMLElement {
     // Un cambio de config obliga a reconstruir el card interno.
     this._built = false;
     this._inner = null;
+    this._innerStyle = undefined;
     if (this.shadowRoot) this.shadowRoot.innerHTML = "";
     if (this._hass) this._render();
   }
@@ -171,8 +248,9 @@ class AcRoomCard extends HTMLElement {
   getCardSize() {
     if (!this._config) return 3;
     const extra = this._config.timer && this._config.timer.entity ? 1 : 0;
-    if (this._config.base_card) return 4 + extra;
-    if (!this._config.entity) return 2;
+    const view = resolveView(this._config);
+    if (view === "custom" || view === "compact") return 4 + extra;
+    if (view === "none" || !this._config.entity) return 2;
     return this._config.entity.startsWith("climate.") ? 6 : 3;
   }
 
@@ -202,18 +280,25 @@ class AcRoomCard extends HTMLElement {
 
     // Con `modes` el propio card dibuja el selector, asi que no hace falta
     // envolver nada salvo que se pida un base_card explicito.
-    // Sin card arriba cuando: se pide explicitamente (base_card: false), hay
-    // selector de modos propio, o no hay equipo que mostrar.
-    const skipInner = cfg.base_card === false ||
-      (!cfg.base_card && ((Array.isArray(cfg.modes) && cfg.modes.length > 0) || !cfg.entity));
+    // Sin card arriba cuando: se pide explicitamente (base_view: none o
+    // base_card: false), hay selector de modos propio, o no hay equipo.
+    const view = resolveView(cfg);
+    const skipInner = view === "none" ||
+      (view !== "custom" && ((Array.isArray(cfg.modes) && cfg.modes.length > 0) || !cfg.entity));
+    const compact = !skipInner && view === "compact" && domain === "climate" &&
+      await whenElement(MINI_CLIMATE);
 
     // base_card permite envolver CUALQUIER card (custom:mini-climate,
     // custom:simple-thermostat, etc). Sin el, se usa el thermostat integrado
     // para entidades climate y un tile para el resto.
     let innerCfg;
-    if (cfg.base_card) {
+    this._innerStyle = cfg.base_card_style || null;
+    if (view === "custom") {
       innerCfg = { ...cfg.base_card };
       if (!innerCfg.entity) innerCfg.entity = cfg.entity;
+    } else if (compact) {
+      innerCfg = compactBaseCard(cfg);
+      if (!this._innerStyle) this._innerStyle = COMPACT_STYLE;
     } else {
       innerCfg =
         domain === "climate"
@@ -393,7 +478,8 @@ class AcRoomCard extends HTMLElement {
      Acepta un string, o un mapa selector -> css para llegar a shadow roots
      anidados (por ejemplo mc-temperature, que tiene el suyo propio). */
   _injectInnerStyle(tries = 0) {
-    const cfg = this._config.base_card_style;
+    // _build() deja el CSS resuelto (el propio o el de la vista compacta).
+    const cfg = this._innerStyle !== undefined ? this._innerStyle : this._config.base_card_style;
     const root = this._inner && this._inner.shadowRoot;
     if (!cfg || !root) return;
     const mapa = typeof cfg === "string" ? { "": cfg } : cfg;
@@ -1063,6 +1149,7 @@ class AcRoomCard extends HTMLElement {
 
 const EDITOR_LABELS = {
   entity: "Equipo (opcional: sin el, no se dibuja tarjeta arriba)",
+  base_view: "Vista de arriba",
   name: "Nombre que se muestra arriba",
   window_entity: "Ventanas (verde todas cerradas, naranjo algunas, rojo todas)",
   battery_warn: "Avisar pila baja bajo (%)",
@@ -1116,6 +1203,13 @@ const fanIds = (list) => normFans(list).map((f) => f.entity);
    cuantos ventiladores haya elegidos. */
 function buildSchema(config) {
   const schema = BASE_SCHEMA.slice();
+  // "Card propio" solo aparece si ya hay un base_card escrito en YAML: desde
+  // el formulario no se puede armar uno.
+  const opciones = VIEW_OPTIONS.slice();
+  if (resolveView(config) === "custom") {
+    opciones.push({ value: "custom", label: `Card propio en YAML (${config.base_card.type || "base_card"})` });
+  }
+  schema.splice(1, 0, { name: "base_view", selector: { select: { mode: "dropdown", options: opciones } } });
   const fans = fanIds((config || {}).fans);
   if (fans.length) {
     schema.push({
@@ -1126,6 +1220,12 @@ function buildSchema(config) {
   }
   return schema;
 }
+
+const VIEW_OPTIONS = [
+  { value: "compact", label: "Compacta: Target / Actual (requiere mini-climate)" },
+  { value: "thermostat", label: "Termostato de Home Assistant" },
+  { value: "none", label: "Ninguna: solo el encabezado y las filas" },
+];
 
 const BASE_SCHEMA = [
   { name: "entity",
@@ -1183,6 +1283,7 @@ function toForm(config) {
                    "battery_warn", "fan_mode", "fans_position", "show_warning", "decimals"]) {
     if (c[k] !== undefined) out[k] = c[k];
   }
+  out.base_view = resolveView(c);
   const pw = c.power_switch;
   if (pw) {
     const o = typeof pw === "string" ? { entity: pw } : pw;
@@ -1221,6 +1322,21 @@ function fromForm(prev, data) {
     const v = d[k];
     if (v === undefined || v === "" || v === null || v === false) delete out[k];
     else out[k] = v;
+  }
+
+  // Vista de arriba. "custom" es un base_card escrito a mano y se deja tal
+  // cual. Elegir otra lo reemplaza, y con el se va su CSS, que apuntaba a ese
+  // card. "thermostat" es el default, asi que no se guarda.
+  if (d.base_view !== undefined) {
+    const eraPropio = resolveView(prev) === "custom";
+    if (d.base_view === "custom" && eraPropio) {
+      delete out.base_view;
+    } else {
+      if (eraPropio) delete out.base_card_style;
+      delete out.base_card;
+      if (d.base_view === "compact" || d.base_view === "none") out.base_view = d.base_view;
+      else delete out.base_view;
+    }
   }
 
   // Enchufe: el form da el entity_id y el booleano de confirmacion. Se
@@ -1299,6 +1415,20 @@ function fromForm(prev, data) {
   return out;
 }
 
+function editorNote(config) {
+  const view = resolveView(config);
+  if (view === "custom") {
+    return `El card de arriba (${config.base_card.type}) se conserva; se edita en YAML.`;
+  }
+  if (view === "compact") {
+    return hasElement(MINI_CLIMATE)
+      ? "Vista compacta: mini-climate con los rotulos Target / Actual."
+      : "Falta instalar mini-climate (HACS). Mientras no este, se dibuja el termostato integrado.";
+  }
+  if (view === "none") return "Sin card arriba: solo el encabezado y las filas de datos.";
+  return "Se usa el termostato integrado de Home Assistant.";
+}
+
 class AcRoomCardEditor extends HTMLElement {
   static get toForm() { return toForm; }
   static get buildSchema() { return buildSchema; }
@@ -1344,9 +1474,7 @@ class AcRoomCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = buildSchema(this._config);
     this._form.data = toForm(this._config);
-    this._note.textContent = this._config.base_card
-      ? `El card de arriba (${this._config.base_card.type}) se conserva; se edita en YAML.`
-      : "Sin base_card se usa el termostato integrado de Home Assistant.";
+    this._note.textContent = editorNote(this._config);
   }
 }
 
@@ -1393,7 +1521,9 @@ class AcRoomsCard extends HTMLElement {
 
   static getStubConfig(hass, entities) {
     const c = (entities || []).filter((e) => e.startsWith("climate.")).slice(0, 3);
-    return { rooms: c.map((e) => ({ entity: e })) };
+    const stub = { rooms: c.map((e) => ({ entity: e })) };
+    if (hasElement(MINI_CLIMATE)) stub.base_view = "compact";
+    return stub;
   }
 
   setConfig(config) {
@@ -1603,6 +1733,10 @@ class AcRoomsCard extends HTMLElement {
     delete cfg.popup;
     // La pieza hereda los decimales de la lista si no trae los suyos.
     if (cfg.decimals === undefined && this._config.decimals !== undefined) cfg.decimals = this._config.decimals;
+    // Y la vista de arriba, salvo que la pieza traiga la suya o un base_card.
+    if (cfg.base_view === undefined && cfg.base_card === undefined && this._config.base_view !== undefined) {
+      cfg.base_view = this._config.base_view;
+    }
     const card = await helpers.createCardElement(cfg);
     card.hass = this._hass;
     this._popupCard = card;
@@ -2065,7 +2199,10 @@ const ROOMS_LABELS = {
   popup: "Al tocar una pieza, abrir su tarjeta completa",
   exclude: "Piezas a excluir",
   decimals: "Decimales de temperatura (vacio = hasta 1)",
+  base_view: "Vista de arriba en el popup (vacio = la de cada pieza)",
 };
+
+const ROOMS_KEYS = ["title", "discover_view", "columns", "exclude", "sort", "decimals", "base_view"];
 
 class AcRoomsCardEditor extends HTMLElement {
   setConfig(config) {
@@ -2130,6 +2267,7 @@ class AcRoomsCardEditor extends HTMLElement {
         { name: "popup", selector: { boolean: {} } },
         { name: "decimals", selector: { number: { min: 0, max: 3, step: 1, mode: "box" } } },
       ]},
+      { name: "base_view", selector: { select: { mode: "dropdown", options: VIEW_OPTIONS } } },
     ];
   }
 
@@ -2142,7 +2280,7 @@ class AcRoomsCardEditor extends HTMLElement {
       this._form.addEventListener("value-changed", (ev) => {
         const d = { ...ev.detail.value };
         const cfg = { ...this._config, ...d, type: this._config.type || "custom:ac-rooms-card" };
-        for (const k of ["title", "discover_view", "columns", "exclude", "sort", "decimals"]) {
+        for (const k of ROOMS_KEYS) {
           const v = cfg[k];
           if (v === undefined || v === "" || v === null || (Array.isArray(v) && !v.length)) delete cfg[k];
         }
@@ -2160,7 +2298,7 @@ class AcRoomsCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = this._esquema(op);
     const d = { popup: this._config.popup !== false };
-    for (const k of ["title", "discover_view", "columns", "exclude", "sort", "decimals"]) {
+    for (const k of ROOMS_KEYS) {
       if (this._config[k] !== undefined) d[k] = this._config[k];
     }
     this._form.data = d;

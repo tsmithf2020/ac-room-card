@@ -27,6 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      # Dos suites: smoke.js y discover.js llevan su propia cadena de promesas.
+      # Tres suites: cada una lleva su propia cadena de promesas.
       - run: node test/smoke.js
       - run: node test/discover.js
+      - run: node test/base_view.js
