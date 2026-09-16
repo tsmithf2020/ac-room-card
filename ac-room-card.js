@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.34.1";
+const VERSION = "0.34.2";
 
 const T = {
   pwOn: "con corriente",
@@ -194,24 +194,31 @@ function modeSteps(hass, m) {
     const n = p.temp !== undefined && p.temp !== null && p.temp !== ""
       ? Number(p.temp)
       : isStateless(p.entity) ? lastNumber(p.name || (st && st.attributes.friendly_name)) : NaN;
-    // Turbo: misma temperatura, mas fuerza. `turbo:` manda; si no, se busca
-    // la palabra en el nombre de la escena o en su entity_id.
-    const turbo = p.turbo !== undefined
-      ? !!p.turbo
-      : /turbo/i.test(`${(st && st.attributes.friendly_name) || ""} ${p.entity}`);
-    return { ...p, num: Number.isFinite(n) ? n : null, turbo };
+    // Turbo y swing: misma temperatura, otra variante. `turbo:` / `swing:`
+    // mandan; si no, se busca en el nombre o el entity_id. Los nombres vienen
+    // pegados y abreviados ("AireLiving23hotTurbSwing"), asi que basta "turb"
+    // en cualquier parte, sin exigir la palabra entera.
+    const texto = `${(st && st.attributes.friendly_name) || ""} ${p.entity}`;
+    const turbo = p.turbo !== undefined ? !!p.turbo : /turb/i.test(texto);
+    const swing = p.swing !== undefined ? !!p.swing : /swing/i.test(texto);
+    return { ...p, num: Number.isFinite(n) ? n : null, turbo, swing };
   });
-  // A igual temperatura, la normal va antes que la turbo: ▲ sube a la turbo.
+  // A igual temperatura: normal, swing, turbo, turbo+swing. ▲ recorre las
+  // variantes antes de pasar al grado siguiente.
   if (pasos.length > 1 && pasos.every((p) => p.num !== null)) {
-    pasos.sort((a, b) => (a.num - b.num) || (Number(a.turbo) - Number(b.turbo)));
+    pasos.sort((a, b) => (a.num - b.num) || (Number(a.turbo) - Number(b.turbo)) ||
+      (Number(a.swing) - Number(b.swing)));
   }
   return pasos;
 }
 
+/* "T", "S", "TS" o nada. */
+const stepMarks = (p) => (p ? `${p.turbo ? "T" : ""}${p.swing ? "S" : ""}` : "");
+
 function stepLabel(hass, p) {
   if (!p) return "";
   if (p.name) return p.name;
-  if (p.num !== null) return `${p.num}°${p.turbo ? " T" : ""}`;
+  if (p.num !== null) return `${p.num}°${stepMarks(p) ? ` ${stepMarks(p)}` : ""}`;
   const st = hass && hass.states[p.entity];
   return (st && st.attributes.friendly_name) || p.entity;
 }
@@ -2085,6 +2092,7 @@ class AcRoomsCard extends HTMLElement {
     // Sin climate, la consigna es la temperatura de la escena en marcha.
     let consigna = attr("temperature");
     let turbo = false;
+    let marcas = "";
     const modos = this._modos(r);
     if (consigna === null && modos.length) {
       const a = activeModeStep(this._hass, modos, r.off_entity);
@@ -2092,11 +2100,13 @@ class AcRoomsCard extends HTMLElement {
       if (paso && paso.num !== null) {
         consigna = dec(paso.num);
         turbo = !!paso.turbo;
+        marcas = stepMarks(paso);
       }
     }
     return {
       target: consigna,
       turbo,
+      marcas,
       actual: attr("current_temperature"),
       real: rs && !["unavailable", "unknown"].includes(rs.state) ? dec(rs.state) : null,
     };
@@ -2438,7 +2448,7 @@ class AcRoomsCard extends HTMLElement {
         fila.querySelector(sel).textContent = v === null ? "" : `${dm === null ? v : v.toFixed(dm)}°`;
       };
       pon(".tgt", t3.target);
-      if (t3.turbo && t3.target !== null) fila.querySelector(".tgt").textContent += "T";
+      if (t3.marcas && t3.target !== null) fila.querySelector(".tgt").textContent += t3.marcas;
       pon(".act", t3.actual);
       pon(".real", t3.real);
 

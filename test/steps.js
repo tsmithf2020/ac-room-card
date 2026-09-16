@@ -179,6 +179,33 @@ const armar = async (cfg) => {
   c._update();
   ok("y un paso sin la palabra ni turbo: true queda sin T", c._stepper.querySelector(".sval").textContent === "22°", c._stepper.querySelector(".sval").textContent);
 
+  console.log("\n--- nombres pegados y abreviados, como en el HA del usuario");
+  Object.assign(hass.states, {
+    "scene.aireliving23hot":          { state: hace(50), attributes: { friendly_name: "AireLiving23hot" } },
+    "scene.aireliving23hotswing":     { state: hace(40), attributes: { friendly_name: "AireLiving23hotSwing" } },
+    "scene.aireliving23hotturb":      { state: hace(30), attributes: { friendly_name: "AireLiving23hotTurb" } },
+    "scene.aireliving23hotturbswing": { state: hace(0),  attributes: { friendly_name: "AireLiving23hotTurbSwing" } },
+    "scene.aireliving24hot":          { state: hace(60), attributes: { friendly_name: "AireLiving24hot" } },
+    "scene.airelivingoff":            { state: hace(900), attributes: {} },
+  });
+  const PEGADO = { name: "Living", off_entity: "scene.airelivingoff", modes: [{ name: "Heat", steps: [
+    "scene.aireliving24hot", "scene.aireliving23hotturbswing", "scene.aireliving23hot",
+    "scene.aireliving23hotturb", "scene.aireliving23hotswing"] }] };
+  c = await armar(PEGADO);
+  ok("'Turb' abreviado y pegado cuenta como turbo, y Swing como S",
+     c._stepper.querySelector(".sval").textContent === "23° TS", c._stepper.querySelector(".sval").textContent);
+  calls.length = 0; c._stepMode(-1);
+  ok("bajar desde 23 TS va a 23 T", calls[0].data.entity_id === "scene.aireliving23hotturb", calls);
+  calls.length = 0; c._stepMode(1);
+  ok("subir desde 23 TS va a 24", calls[0].data.entity_id === "scene.aireliving24hot", calls);
+  hass.states["scene.aireliving23hotswing"].state = new Date(Date.now() + 500).toISOString();
+  c._update();
+  ok("23 con swing solo se ve 23° S", c._stepper.querySelector(".sval").textContent === "23° S", c._stepper.querySelector(".sval").textContent);
+  calls.length = 0; c._stepMode(-1);
+  ok("y bajar va a 23 normal", calls[0].data.entity_id === "scene.aireliving23hot", calls);
+  const rp = new ROOMS(); rp.setConfig({ rooms: [PEGADO] }); rp._hass = hass;
+  ok("en la lista las marcas van pegadas al numero", rp._temps(PEGADO).marcas === "S" && rp._temps(PEGADO).target === 23, rp._temps(PEGADO));
+
   console.log("\n--- editor");
   const f = ED.toForm(cfgBase);
   ok("frío va como lista de una", JSON.stringify(f.mode_cold_entity) === '["scene.frio"]', f.mode_cold_entity);
