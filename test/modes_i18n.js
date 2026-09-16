@@ -169,6 +169,27 @@ const hass = {
   try { rc._toggle(vacia); ok("pieza sin equipo no revienta", calls.length === 0, calls); }
   catch (e) { ok("pieza sin equipo no revienta", false, e.message); }
 
+  console.log("\n--- rooms card: filas con on/off no salen grises");
+  const filas = (rooms) => { const x = mkR({ rooms }); x._piezas = rooms; x._build(); x._update(); return x._filas; };
+  const [fEsc, fBool, fSensores, fFalta, fModoFalta] = filas([
+    { name: "Living", modes: escenas, off_entity: "scene.apagar" },
+    { name: "Niños", modes: [{ entity: "input_boolean.frio" }] },
+    { name: "Garage", temp_entity: "sensor.t" },
+    { name: "Borrado", entity: "climate.no_existe" },
+    { name: "IR borrado", modes: [{ entity: "scene.no_existe" }] },
+  ]);
+  const gris = (f) => /\bgone\b/.test(f.fila.className);
+  ok("pieza por escenas sin entity NO sale gris", !gris(fEsc), fEsc.fila.className);
+  ok("y marca su modo encendido", /\bon\b/.test(fEsc.fila.className), fEsc.fila.className);
+  ok("pieza por boolean sin entity NO sale gris", !gris(fBool), fBool.fila.className);
+  ok("las dos llevan boton de encendido", fEsc.fila.querySelector(".pwr").style.visibility === "" &&
+     fBool.fila.querySelector(".pwr").style.visibility === "", "");
+  ok("pieza solo con sensores no sale gris", !gris(fSensores), fSensores.fila.className);
+  ok("pero no lleva boton que no hace nada", fSensores.fila.querySelector(".pwr").style.visibility === "hidden",
+     fSensores.fila.querySelector(".pwr").style.visibility);
+  ok("un climate que no existe si sale gris", gris(fFalta), fFalta.fila.className);
+  ok("y unos modos que no existen tambien", gris(fModoFalta), fModoFalta.fila.className);
+
   console.log("\n--- editor del rooms card: piezas desde la UI");
   const e = new RED(); e._hass = hass;
   e.setConfig({ type: "custom:ac-rooms-card" });

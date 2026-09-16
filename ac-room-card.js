@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.33.0";
+const VERSION = "0.33.1";
 
 const T = {
   pwOn: "con corriente",
@@ -1791,6 +1791,24 @@ class AcRoomsCard extends HTMLElement {
     return normEntries(r.modes);
   }
 
+  /* Se puede prender y apagar: tiene equipo o tiene modos. */
+  _conmutable(r) {
+    return !!r.entity || this._modos(r).length > 0;
+  }
+
+  /* La fila va atenuada solo si lo que la maneja no existe en Home Assistant.
+     Antes bastaba no tener `entity`, y una pieza por IR con sus modos en
+     booleans o escenas quedaba gris aunque funcionara perfecto. */
+  _existe(r) {
+    const modos = this._modos(r);
+    if (modos.length) {
+      return modos.some((m) => !!this._hass.states[m.entity]) ||
+        !!(r.off_entity && this._hass.states[r.off_entity]);
+    }
+    if (r.entity) return !!this._hass.states[r.entity];
+    return true;
+  }
+
   _encendida(r) {
     const modos = this._modos(r);
     if (modos.length) return activeModeIndex(this._hass, modos, r.off_entity) >= 0;
@@ -2179,7 +2197,7 @@ class AcRoomsCard extends HTMLElement {
     for (const { r, fila, btns } of this._filas) {
       const st = this._hass.states[r.entity];
       const on = this._encendida(r);
-      const noExiste = !st;
+      const noExiste = !this._existe(r);
 
       const modo = this._hvac(r);
       fila.className = "room" + (on ? " on" : "") + (noExiste ? " gone" : "") +
@@ -2187,6 +2205,9 @@ class AcRoomsCard extends HTMLElement {
       const pwr = fila.querySelector(".pwr");
       pwr.className = on ? "pwr on" : "pwr";
       pwr.title = on ? "" : L.off;
+      // Una pieza sin nada que prender (solo sensores) no lleva boton: el
+      // hueco se reserva para que las columnas sigan calzando.
+      pwr.style.visibility = this._conmutable(r) ? "" : "hidden";
 
       fila.querySelector(".rname").textContent =
         r.name || (st && st.attributes.friendly_name) || r.entity;
