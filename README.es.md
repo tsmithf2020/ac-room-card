@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.34.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.34.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -506,6 +506,11 @@ off_entity: scene.living_ac_off
 - **Orden.** Si todos los pasos tienen temperatura, se ordenan de menor a mayor:
   ▲ siempre sube, en el orden que sea que los hayas puesto. Sin números, se usa
   el orden de la lista.
+- **Turbo.** Una escena con *turbo* en el nombre o en el entity_id (*Living aire
+  calor 24 Turbo*) se muestra como **24° T** y queda justo arriba de la de 24°
+  normal, así que ▲ va 24° → 24° T → 26°. Si el nombre no lo dice, pon
+  `turbo: true` en el paso. En la lista de piezas, la columna Target muestra
+  **24°T**.
 - **Qué paso está activo** se calcula igual que cualquier modo por escena: el
   que se disparó más recientemente. Las flechas se deshabilitan en los extremos
   y se esconden si el modo en marcha tiene una sola escena o el aire está

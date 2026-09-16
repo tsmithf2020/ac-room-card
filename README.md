@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.34.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.34.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -499,6 +499,10 @@ off_entity: scene.living_ac_off
 - **Order.** When every step has a temperature they are sorted low to high, so
   ▲ always goes warmer, whatever order you listed them in. Without numbers the
   list order is used.
+- **Turbo.** A scene with *turbo* in its name or entity id (*Living AC heat 24
+  Turbo*) shows as **24° T** and sits right above the normal 24°, so ▲ goes
+  24° → 24° T → 26°. If the name does not say it, set `turbo: true` on the step.
+  On the rooms list the Target column shows **24°T**.
 - **Which step is on** is worked out like any scene mode: the one fired most
   recently. The arrows grey out at either end and hide when the running mode
   has a single scene or the unit is off.

@@ -143,6 +143,42 @@ const armar = async (cfg) => {
   hass.states["scene.apagar"].state = new Date(Date.now() + 1000).toISOString();
   ok("apagada, Target vacio", r._temps(cfgBase).target === null, r._temps(cfgBase));
 
+  console.log("\n--- turbo: misma temperatura, marcada con T");
+  Object.assign(hass.states, {
+    "scene.v_24":       { state: hace(40), attributes: { friendly_name: "Living calor 24" } },
+    "scene.v_24_turbo": { state: hace(1),  attributes: { friendly_name: "Living calor 24 Turbo" } },
+    "scene.v_22":       { state: hace(60), attributes: { friendly_name: "Living calor 22" } },
+    "scene.v_20_t":     { state: hace(90), attributes: { friendly_name: "Living calor 20 fuerte" } },
+    "scene.v_off":      { state: hace(500), attributes: {} },
+  });
+  // La turbo va primero en la lista a proposito: el orden lo pone la temperatura.
+  const TURBO = { name: "Turbo", modes: [{ name: "Calor", steps: ["scene.v_24_turbo", "scene.v_22", "scene.v_24"] }], off_entity: "scene.v_off" };
+  c = await armar(TURBO);
+  ok("reconoce Turbo en el nombre y pone la T", c._stepper.querySelector(".sval").textContent === "24° T", c._stepper.querySelector(".sval").textContent);
+  ok("la turbo es el tope: subir deshabilitado", c._stepper.querySelector(".sup").disabled === true, "");
+  calls.length = 0; c._stepMode(-1);
+  ok("bajar desde 24 T va a 24 normal, no a 22", calls[0].data.entity_id === "scene.v_24", calls);
+
+  hass.states["scene.v_24"].state = hace(0);
+  c._update();
+  ok("la normal se ve sin T", c._stepper.querySelector(".sval").textContent === "24°", c._stepper.querySelector(".sval").textContent);
+  calls.length = 0; c._stepMode(1);
+  ok("y subir desde 24 va a 24 T", calls[0].data.entity_id === "scene.v_24_turbo", calls);
+
+  const rt = new ROOMS(); rt.setConfig({ rooms: [TURBO] }); rt._hass = hass;
+  hass.states["scene.v_24_turbo"].state = new Date(Date.now() + 500).toISOString();
+  const t3 = rt._temps(TURBO);
+  ok("en la lista, Target sabe que es turbo", t3.target === 24 && t3.turbo === true, t3);
+
+  const explicito = { name: "E", modes: [{ name: "Calor", steps: [
+    { entity: "scene.v_20_t", turbo: true }, { entity: "scene.v_22" }] }] };
+  hass.states["scene.v_20_t"].state = new Date(Date.now() + 1000).toISOString();
+  c = await armar(explicito);
+  ok("turbo: true sin la palabra en el nombre tambien pone la T", c._stepper.querySelector(".sval").textContent === "20° T", c._stepper.querySelector(".sval").textContent);
+  hass.states["scene.v_22"].state = new Date(Date.now() + 2000).toISOString();
+  c._update();
+  ok("y un paso sin la palabra ni turbo: true queda sin T", c._stepper.querySelector(".sval").textContent === "22°", c._stepper.querySelector(".sval").textContent);
+
   console.log("\n--- editor");
   const f = ED.toForm(cfgBase);
   ok("frío va como lista de una", JSON.stringify(f.mode_cold_entity) === '["scene.frio"]', f.mode_cold_entity);
