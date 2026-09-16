@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.33.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.34.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -133,7 +133,7 @@ timer:
 | `energy_today_entity` | string | no | Energy used today. |
 | `energy_month_entity` | string | no | Energy used this month. |
 | `timer` | map | no | Built-in shutdown timer — see [Timer](#timer). |
-| `modes` | list | no | Cool/heat selector for units without a `climate` entity. Each mode is an `input_boolean`, `switch`, `scene`, `script`, `button` or `input_button`. See [Mode selector](#mode-selector-cool--heat). |
+| `modes` | list | no | Cool/heat selector for units without a `climate` entity. Each mode is an `input_boolean`, `switch`, `scene`, `script`, `button` or `input_button`, or several scenes in `steps` for temperature arrows. See [Mode selector](#mode-selector-cool--heat). |
 | `off_entity` | string | no | The `scene`, `script` or button the **Off** button fires, for units whose modes are scenes. See [Mode selector](#mode-selector-cool--heat). |
 | `mode_buttons` | bool | no | Row of HVAC mode buttons under the built-in thermostat. On by default; `false` hides it. See [Mode buttons](#mode-buttons). |
 | `base_view` | string | no | What goes on top, pickable in the visual editor: `compact` (mini-climate with Target / Actual labels), `thermostat` (default) or `none`. See [Compact view](#compact-view). |
@@ -470,6 +470,47 @@ fields.
 The rooms list uses the same thing: its power button fires the first mode to
 turn on, and `off_entity` to turn off.
 
+### Several scenes per mode (temperature arrows)
+
+An IR remote does not send "set 22 °C": each temperature is its own code, so it
+is usually its own scene. Give a mode all of them in `steps` and the card shows
+**▼ 22° ▲** next to the mode buttons while that mode runs:
+
+```yaml
+type: custom:ac-room-card
+name: Living
+modes:
+  - name: Cool
+    entity: scene.living_ac_cool
+    icon: mdi:snowflake
+  - name: Heat
+    icon: mdi:fire
+    steps:
+      - scene.living_ac_heat_20
+      - scene.living_ac_heat_22
+      - scene.living_ac_heat_24
+off_entity: scene.living_ac_off
+```
+
+- **The temperature** of each step is the last number in the scene's name
+  (*Living AC heat 22* → 22°). If the names do not carry it, set it:
+  `- { entity: scene.living_ac_heat_low, temp: 20 }`. A step's `name` replaces
+  the label altogether.
+- **Order.** When every step has a temperature they are sorted low to high, so
+  ▲ always goes warmer, whatever order you listed them in. Without numbers the
+  list order is used.
+- **Which step is on** is worked out like any scene mode: the one fired most
+  recently. The arrows grey out at either end and hide when the running mode
+  has a single scene or the unit is off.
+- **Tapping the mode** goes back to the step you last used in it (the lowest one
+  if it was never used).
+
+In the visual editor, pick several scenes in **Cool mode** or **Heat mode**: a
+temperature field appears for each one, empty meaning "take it from the name".
+
+On the rooms list, the **Target** column shows the temperature of the running
+step, and the popup has the arrows.
+
 ---
 
 ## Compact view
@@ -753,6 +794,7 @@ node test/smoke.js        # the room card: data line, windows, fans, timer, edit
 node test/discover.js     # discovery and the rooms editor
 node test/base_view.js    # the top view picked from the editor
 node test/modes_i18n.js   # scene/button modes, mode buttons and language
+node test/steps.js        # several scenes per mode and the temperature arrows
 ```
 
 No browser: a minimal DOM shim exercises value formatting,

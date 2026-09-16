@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.33.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.34.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -136,7 +136,7 @@ timer:
 | `energy_today_entity` | string | no | Energía usada hoy. |
 | `energy_month_entity` | string | no | Energía usada este mes. |
 | `timer` | map | no | Temporizador de apagado integrado: ver [Temporizador](#temporizador). |
-| `modes` | lista | no | Selector frío/calor para aires sin entidad `climate`. Cada modo es un `input_boolean`, `switch`, `scene`, `script`, `button` o `input_button`. Ver [Selector de modo](#selector-de-modo-frío--calor). |
+| `modes` | lista | no | Selector frío/calor para aires sin entidad `climate`. Cada modo es un `input_boolean`, `switch`, `scene`, `script`, `button` o `input_button`, o varias escenas en `steps` para las flechas de temperatura. Ver [Selector de modo](#selector-de-modo-frío--calor). |
 | `off_entity` | string | no | La escena, script o botón que dispara el botón **Apagado**, para aires cuyos modos son escenas. Ver [Selector de modo](#selector-de-modo-frío--calor). |
 | `mode_buttons` | bool | no | Fila de botones de modo bajo el termostato integrado. Activa por defecto; `false` la oculta. Ver [Botones de modo](#botones-de-modo). |
 | `base_view` | string | no | Lo que va arriba, elegible en el editor visual: `compact` (mini-climate con rótulos Target / Actual), `thermostat` (por defecto) o `none`. Ver [Vista compacta](#vista-compacta). |
@@ -476,6 +476,50 @@ En el editor visual son los campos **Modo frío**, **Modo calor** y **Apagar**.
 La lista de piezas usa lo mismo: su botón de encendido dispara el primer modo
 para prender y `off_entity` para apagar.
 
+### Varias escenas por modo (flechas de temperatura)
+
+Un control IR no manda "pon 22 °C": cada temperatura es un código distinto, así
+que normalmente es su propia escena. Dale al modo todas en `steps` y la tarjeta
+muestra **▼ 22° ▲** al lado de los botones de modo mientras ese modo está en
+marcha:
+
+```yaml
+type: custom:ac-room-card
+name: Living
+modes:
+  - name: Frío
+    entity: scene.living_ac_cool
+    icon: mdi:snowflake
+  - name: Calor
+    icon: mdi:fire
+    steps:
+      - scene.living_ac_heat_20
+      - scene.living_ac_heat_22
+      - scene.living_ac_heat_24
+off_entity: scene.living_ac_off
+```
+
+- **La temperatura** de cada paso es el último número del nombre de la escena
+  (*Living aire calor 22* → 22°). Si los nombres no la traen, ponla tú:
+  `- { entity: scene.living_ac_heat_suave, temp: 20 }`. Un `name` en el paso
+  reemplaza el rótulo completo.
+- **Orden.** Si todos los pasos tienen temperatura, se ordenan de menor a mayor:
+  ▲ siempre sube, en el orden que sea que los hayas puesto. Sin números, se usa
+  el orden de la lista.
+- **Qué paso está activo** se calcula igual que cualquier modo por escena: el
+  que se disparó más recientemente. Las flechas se deshabilitan en los extremos
+  y se esconden si el modo en marcha tiene una sola escena o el aire está
+  apagado.
+- **Al tocar el modo** vuelve al paso que usaste la última vez en él (el más
+  bajo, si nunca se usó).
+
+En el editor visual, elige varias escenas en **Modo frío** o **Modo calor**:
+aparece un campo de temperatura para cada una; vacío quiere decir "sácala del
+nombre".
+
+En la lista de piezas, la columna **Target** muestra la temperatura del paso en
+marcha, y el popup trae las flechas.
+
 ---
 
 ## Vista compacta
@@ -768,6 +812,7 @@ node test/smoke.js        # la tarjeta de pieza: línea de datos, ventanas, vent
 node test/discover.js     # descubrimiento y editor de piezas
 node test/base_view.js    # la vista de arriba elegida desde el editor
 node test/modes_i18n.js   # modos con escenas y botones, botones de modo e idioma
+node test/steps.js        # varias escenas por modo y las flechas de temperatura
 ```
 
 Sin navegador: un shim mínimo de DOM prueba el formato de los valores, que los

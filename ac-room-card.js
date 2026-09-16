@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.33.1";
+const VERSION = "0.34.0";
 
 const T = {
   pwOn: "con corriente",
@@ -162,22 +162,88 @@ function firedAt(hass, id) {
   return Number.isFinite(t) ? t : 0;
 }
 
-function activeModeIndex(hass, modes, offEntity) {
+/* Como normEntries, pero un modo puede no traer `entity` si trae `steps`. */
+function normModes(v) {
+  if (!v) return [];
+  return (Array.isArray(v) ? v : [v])
+    .map((x) => (typeof x === "string" ? { entity: x } : x))
+    .filter((x) => x && (x.entity || normEntries(x.steps).length));
+}
+
+/* Un modo con estado propio (boolean o switch), no una escena. */
+const modeIsStateful = (m) =>
+  !normEntries(m.steps).length && !!m.entity && !isStateless(m.entity);
+
+/* El ultimo numero del texto: "Living calor 22" -> 22. */
+function lastNumber(txt) {
+  const m = /(\d+(?:[.,]\d+)?)(?!.*\d)/.exec(String(txt || ""));
+  return m ? Number(m[1].replace(",", ".")) : NaN;
+}
+
+/* Los pasos de un modo: `steps` (varias escenas, una por temperatura) o su
+   `entity` sola. La temperatura de cada paso es `temp`, o si no, el numero
+   del nombre de la escena. Si todos tienen numero se ordenan de menor a
+   mayor, que es lo que esperan las flechas. */
+function modeSteps(hass, m) {
+  const lista = normEntries(m && m.steps);
+  const base = lista.length ? lista : (m && m.entity ? [{ entity: m.entity }] : []);
+  const pasos = base.map((p) => {
+    const st = hass && hass.states[p.entity];
+    // El numero del nombre solo cuenta en escenas y botones: en un boolean
+    // ("AC pieza 2") casi nunca es una temperatura.
+    const n = p.temp !== undefined && p.temp !== null && p.temp !== ""
+      ? Number(p.temp)
+      : isStateless(p.entity) ? lastNumber(p.name || (st && st.attributes.friendly_name)) : NaN;
+    return { ...p, num: Number.isFinite(n) ? n : null };
+  });
+  if (pasos.length > 1 && pasos.every((p) => p.num !== null)) pasos.sort((a, b) => a.num - b.num);
+  return pasos;
+}
+
+function stepLabel(hass, p) {
+  if (!p) return "";
+  if (p.name) return p.name;
+  if (p.num !== null) return `${p.num}°`;
+  const st = hass && hass.states[p.entity];
+  return (st && st.attributes.friendly_name) || p.entity;
+}
+
+/* Modo y paso en marcha. Un boolean prendido gana; si no, el paso de escena
+   disparado mas recientemente, salvo que `off_entity` sea mas nuevo. */
+function activeModeStep(hass, modes, offEntity) {
   const lista = modes || [];
   const conEstado = lista.findIndex((m) => {
-    if (isStateless(m.entity)) return false;
+    if (!modeIsStateful(m)) return false;
     const st = hass.states[m.entity];
     return !!st && st.state === "on";
   });
-  if (conEstado >= 0) return conEstado;
-  let mejor = -1;
+  if (conEstado >= 0) return { mode: conEstado, step: 0 };
+  let mejor = { mode: -1, step: -1 };
   let hora = offEntity ? firedAt(hass, offEntity) : 0;
   lista.forEach((m, i) => {
-    if (!isStateless(m.entity)) return;
-    const t = firedAt(hass, m.entity);
-    if (t > hora) { hora = t; mejor = i; }
+    modeSteps(hass, m).forEach((p, j) => {
+      if (!isStateless(p.entity)) return;
+      const t = firedAt(hass, p.entity);
+      if (t > hora) { hora = t; mejor = { mode: i, step: j }; }
+    });
   });
   return mejor;
+}
+
+function activeModeIndex(hass, modes, offEntity) {
+  return activeModeStep(hass, modes, offEntity).mode;
+}
+
+/* Al elegir un modo se vuelve al paso que se uso la ultima vez en ese modo;
+   si nunca se uso, el primero. */
+function lastUsedStep(hass, pasos) {
+  let j = 0;
+  let hora = 0;
+  pasos.forEach((p, i) => {
+    const t = firedAt(hass, p.entity);
+    if (t > hora) { hora = t; j = i; }
+  });
+  return j;
 }
 
 function fireEntity(hass, id, on = true) {
@@ -191,23 +257,37 @@ function fireEntity(hass, id, on = true) {
 /* Apaga primero los otros y despues prende el elegido: si cada boolean
    dispara una escena IR, el orden inverso dejaria el equipo apagado.
    idx -1 es Apagado: apaga los booleans y dispara `off_entity` si hay. */
-function setModeFor(hass, modes, offEntity, idx) {
+function setModeFor(hass, modes, offEntity, idx, stepIdx) {
   const lista = modes || [];
   lista.forEach((m, i) => {
-    if (i === idx || isStateless(m.entity)) return;
+    if (i === idx || !modeIsStateful(m)) return;
     const st = hass.states[m.entity];
     if (st && st.state === "on") fireEntity(hass, m.entity, false);
   });
   if (idx < 0) {
     if (offEntity) fireEntity(hass, offEntity, true);
   } else if (lista[idx]) {
-    fireEntity(hass, lista[idx].entity, true);
+    const pasos = modeSteps(hass, lista[idx]);
+    const j = stepIdx === undefined ? lastUsedStep(hass, pasos) : stepIdx;
+    if (pasos[j]) fireEntity(hass, pasos[j].entity, true);
   }
+}
+
+/* Flechas: sube o baja un paso dentro del modo en marcha. En los extremos no
+   hace nada. Devuelve si disparo algo. */
+function stepModeFor(hass, modes, offEntity, dir) {
+  const a = activeModeStep(hass, modes, offEntity);
+  if (a.mode < 0) return false;
+  const pasos = modeSteps(hass, modes[a.mode]);
+  const j = a.step + dir;
+  if (j < 0 || j >= pasos.length) return false;
+  fireEntity(hass, pasos[j].entity, true);
+  return true;
 }
 
 /* Sin boolean que apagar ni off_entity, el boton Apagado no haria nada. */
 const canTurnOff = (modes, offEntity) =>
-  !!offEntity || (modes || []).some((m) => !isStateless(m.entity));
+  !!offEntity || (modes || []).some(modeIsStateful);
 
 function moreInfo(el, entityId) {
   if (!entityId) return;
@@ -474,7 +554,8 @@ class AcRoomCard extends HTMLElement {
       card.appendChild(innerWrap);
     }
 
-    if (Array.isArray(cfg.modes) && cfg.modes.length) {
+    const modos = normModes(cfg.modes);
+    if (modos.length) {
       const mr = document.createElement("div");
       mr.className = "moderow";
       const mk = (label, icon, idx) => {
@@ -487,9 +568,24 @@ class AcRoomCard extends HTMLElement {
         mr.appendChild(b);
         return b;
       };
-      this._modeBtns = canTurnOff(normEntries(cfg.modes), cfg.off_entity)
+      this._modeBtns = canTurnOff(modos, cfg.off_entity)
         ? [mk(cfg.labels.off, "mdi:power", -1)] : [];
-      cfg.modes.forEach((m, i) => this._modeBtns.push(mk(m.name || m.entity, m.icon, i)));
+      modos.forEach((m, i) => this._modeBtns.push(mk(m.name || m.entity, m.icon, i)));
+
+      // Flechas para pasar entre las escenas del modo en marcha (una por
+      // temperatura). Solo se ven si ese modo tiene mas de una.
+      if (modos.some((m) => normEntries(m.steps).length > 1)) {
+        const sp = document.createElement("span");
+        sp.className = "stepper";
+        sp.innerHTML =
+          `<button class="sdown"><ha-icon icon="mdi:chevron-down"></ha-icon></button>` +
+          `<span class="sval"></span>` +
+          `<button class="sup"><ha-icon icon="mdi:chevron-up"></ha-icon></button>`;
+        sp.querySelector(".sdown").addEventListener("click", () => this._stepMode(-1));
+        sp.querySelector(".sup").addEventListener("click", () => this._stepMode(1));
+        mr.appendChild(sp);
+        this._stepper = sp;
+      }
       card.appendChild(mr);
       this._rows.modes = mr;
     }
@@ -1012,19 +1108,41 @@ class AcRoomCard extends HTMLElement {
   /* ---------- modos (frio / calor) ---------- */
 
   _activeMode() {
-    return activeModeIndex(this._hass, normEntries(this._config.modes), this._config.off_entity);
+    return activeModeIndex(this._hass, normModes(this._config.modes), this._config.off_entity);
   }
 
   _setMode(idx) {
-    setModeFor(this._hass, normEntries(this._config.modes), this._config.off_entity, idx);
+    setModeFor(this._hass, normModes(this._config.modes), this._config.off_entity, idx);
+  }
+
+  _stepMode(dir) {
+    stepModeFor(this._hass, normModes(this._config.modes), this._config.off_entity, dir);
   }
 
   _updateModes() {
     if (!this._modeBtns) return;
-    const active = this._activeMode();
+    const modos = normModes(this._config.modes);
+    const a = activeModeStep(this._hass, modos, this._config.off_entity);
     this._modeBtns.forEach((b) => {
-      b.className = Number(b.dataset.idx) === active ? "mode on" : "mode";
+      b.className = Number(b.dataset.idx) === a.mode ? "mode on" : "mode";
     });
+    if (!this._stepper) return;
+    const pasos = a.mode >= 0 ? modeSteps(this._hass, modos[a.mode]) : [];
+    if (pasos.length < 2) {
+      this._stepper.style.display = "none";
+      return;
+    }
+    this._stepper.style.display = "";
+    const actual = pasos[a.step];
+    const val = this._stepper.querySelector(".sval");
+    if (val) {
+      val.textContent = stepLabel(this._hass, actual);
+      val.title = (actual && ((this._hass.states[actual.entity] || {}).attributes || {}).friendly_name) || "";
+    }
+    const abajo = this._stepper.querySelector(".sdown");
+    const arriba = this._stepper.querySelector(".sup");
+    if (abajo) abajo.disabled = a.step <= 0;
+    if (arriba) arriba.disabled = a.step >= pasos.length - 1;
   }
 
   /* ---------- timer ---------- */
@@ -1238,6 +1356,23 @@ class AcRoomCard extends HTMLElement {
         background: color-mix(in srgb, var(--primary-color, #03a9f4) 12%, transparent);
         font-weight: 500;
       }
+      .moderow .stepper {
+        flex: 0 0 auto; display: inline-flex; align-items: center; gap: 2px;
+        border: 1px solid var(--primary-color, #03a9f4); border-radius: 8px;
+        padding: 0 2px;
+      }
+      .moderow .stepper button {
+        display: inline-flex; align-items: center; justify-content: center;
+        border: none; background: transparent; cursor: pointer; padding: 3px;
+        color: var(--primary-color, #03a9f4); border-radius: 6px;
+      }
+      .moderow .stepper button:hover { background: var(--secondary-background-color, #f0f0f0); }
+      .moderow .stepper button:disabled { color: var(--disabled-text-color, #bdbdbd); cursor: default; background: none; }
+      .moderow .stepper ha-icon { --mdc-icon-size: 20px; }
+      .moderow .sval {
+        min-width: 38px; text-align: center; font-size: 14px; font-weight: 500;
+        font-variant-numeric: tabular-nums; color: var(--primary-text-color);
+      }
       .timerrow {
         display: flex; align-items: center; gap: 8px;
         padding: 8px 16px 12px 16px;
@@ -1282,8 +1417,10 @@ const EDITOR_LABELS = {
     fans: "Ventiladores (uno va en la línea; dos o más, en su propia fila)",
     fan_mode: "Mostrar la velocidad del ventilador del equipo",
     fans_position: "Dónde van los ventiladores",
-    mode_cold_entity: "Modo FRÍO: boolean, escena, script o botón (equipos sin climate)",
-    mode_heat_entity: "Modo CALOR (opcional)",
+    mode_cold_entity: "Modo FRÍO: boolean, escena, script o botón (varias escenas = flechas de temperatura)",
+    mode_heat_entity: "Modo CALOR (opcional; también acepta varias escenas)",
+    step_temp: "Temperatura de",
+    step_temp_hint: "(vacío = el número del nombre)",
     mode_off_entity: "APAGAR: escena, script o botón (opcional)",
     icon: "Ícono del encabezado (opcional)",
     power_entity: "Potencia",
@@ -1310,8 +1447,10 @@ const EDITOR_LABELS = {
     fans: "Fans (one goes on the data line; two or more, on their own row)",
     fan_mode: "Show the unit's own fan speed",
     fans_position: "Where the fans go",
-    mode_cold_entity: "COOL mode: boolean, scene, script or button (units without climate)",
-    mode_heat_entity: "HEAT mode (optional)",
+    mode_cold_entity: "COOL mode: boolean, scene, script or button (several scenes = temperature arrows)",
+    mode_heat_entity: "HEAT mode (optional; also takes several scenes)",
+    step_temp: "Temperature of",
+    step_temp_hint: "(empty = the number in its name)",
     mode_off_entity: "TURN OFF: scene, script or button (optional)",
     icon: "Title icon (optional)",
     power_entity: "Power",
@@ -1373,6 +1512,20 @@ function buildSchema(config, lang = "es") {
     { name: "base_view", selector: { select: { mode: "dropdown", options: opciones } } },
     { name: "mode_buttons", selector: { boolean: {} } },
   ]});
+  // Un modo con varias escenas pide la temperatura de cada una, para las
+  // flechas. Vacia, se usa el numero del nombre de la escena.
+  const modos = normModes((config || {}).modes);
+  const tempsDe = (idx, clave) => {
+    const pasos = normEntries(modos[idx] && modos[idx].steps);
+    return pasos.length > 1
+      ? pasos.map((_, i) => ({ name: `${clave}_temp_${i}`, selector: { number: { min: 0, max: 40, step: 0.5, mode: "box" } } }))
+      : [];
+  };
+  const temps = [...tempsDe(0, "mode_cold"), ...tempsDe(1, "mode_heat")];
+  if (temps.length) {
+    const pos = schema.findIndex((s) => s.name === "mode_off_entity");
+    schema.splice(pos + 1, 0, { name: "", type: "grid", schema: temps });
+  }
   const fans = fanIds((config || {}).fans);
   if (fans.length) {
     schema.push({
@@ -1410,8 +1563,8 @@ const baseSchema = (lang) => [
     { name: "power_switch_confirm", selector: { boolean: {} } },
   ]},
   { name: "", type: "grid", schema: [
-    { name: "mode_cold_entity", selector: { entity: { domain: MODE_DOMAINS } } },
-    { name: "mode_heat_entity", selector: { entity: { domain: MODE_DOMAINS } } },
+    { name: "mode_cold_entity", selector: { entity: { domain: MODE_DOMAINS, multiple: true } } },
+    { name: "mode_heat_entity", selector: { entity: { domain: MODE_DOMAINS, multiple: true } } },
   ]},
   { name: "mode_off_entity", selector: { entity: { domain: ["scene", "script", "button", "input_button"] } } },
   { name: "window_entity", selector: { entity: { domain: "binary_sensor", multiple: true } } },
@@ -1467,13 +1620,52 @@ function toForm(config) {
       out[`fan_name_${i}`] = f.name || "";
     });
   }
-  const m = Array.isArray(c.modes) ? c.modes : [];
-  if (m[0] && m[0].entity) out.mode_cold_entity = m[0].entity;
-  if (m[1] && m[1].entity) out.mode_heat_entity = m[1].entity;
+  // Cada modo va al form como lista: una escena, o varias (una por
+  // temperatura) con su campo de temperatura cada una.
+  const m = normModes(c.modes);
+  [["mode_cold", m[0]], ["mode_heat", m[1]]].forEach(([clave, modo]) => {
+    if (!modo) return;
+    const pasos = normEntries(modo.steps);
+    out[`${clave}_entity`] = pasos.length ? pasos.map((p) => p.entity) : [modo.entity];
+    if (pasos.length > 1) {
+      pasos.forEach((p, i) => {
+        if (p.temp !== undefined && p.temp !== null && p.temp !== "") out[`${clave}_temp_${i}`] = p.temp;
+      });
+    }
+  });
   if (t.entity) out.timer_entity = t.entity;
   if (t.minutes_entity) out.timer_minutes_entity = t.minutes_entity;
   if (t.button_entity) out.timer_button_entity = t.button_entity;
   return out;
+}
+
+/* Un modo desde el form. Una escena queda como `entity`; varias, como
+   `steps` con la temperatura de cada una. Igual que con los nombres de los
+   ventiladores, si la lista acaba de cambiar los campos de temperatura (por
+   posicion) ya no calzan, asi que se conserva la temperatura por entidad. */
+function modeFromForm(d, clave, prevMode, defecto) {
+  const raw = d[`${clave}_entity`];
+  const ids = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter(Boolean);
+  if (!ids.length) return null;
+  const base = { ...(prevMode || defecto) };
+  if (ids.length === 1) {
+    delete base.steps;
+    base.entity = ids[0];
+    return base;
+  }
+  const prevSteps = normEntries(prevMode && prevMode.steps);
+  const listaCambio = prevSteps.length !== ids.length || prevSteps.some((p, i) => p.entity !== ids[i]);
+  delete base.entity;
+  base.steps = ids.map((id, i) => {
+    const old = prevSteps.find((p) => p.entity === id) || {};
+    const campo = `${clave}_temp_${i}`;
+    const t = !listaCambio && campo in d ? d[campo] : old.temp;
+    const paso = { entity: id };
+    if (old.name) paso.name = old.name;
+    if (t !== undefined && t !== null && t !== "" && Number.isFinite(Number(t))) paso.temp = Number(t);
+    return paso.name || paso.temp !== undefined ? paso : id;
+  });
+  return base;
 }
 
 function fromForm(prev, data, lang = "es") {
@@ -1567,16 +1759,15 @@ function fromForm(prev, data, lang = "es") {
   for (const k of Object.keys(out)) if (/^fan_name_\d+$/.test(k)) delete out[k];
 
   // Reconstruye `modes` conservando nombre e icono si ya existian
-  const prevModes = Array.isArray((prev || {}).modes) ? prev.modes : [];
+  const prevModes = normModes((prev || {}).modes);
   const modes = [];
-  if (d.mode_cold_entity) {
-    modes.push({ ...(prevModes[0] || { name: tr(lang, "Frío", "Cool"), icon: "mdi:snowflake" }), entity: d.mode_cold_entity });
-  }
-  if (d.mode_heat_entity) {
-    modes.push({ ...(prevModes[1] || { name: tr(lang, "Calor", "Heat"), icon: "mdi:fire" }), entity: d.mode_heat_entity });
-  }
+  const cold = modeFromForm(d, "mode_cold", prevModes[0], { name: tr(lang, "Frío", "Cool"), icon: "mdi:snowflake" });
+  const heat = modeFromForm(d, "mode_heat", prevModes[1], { name: tr(lang, "Calor", "Heat"), icon: "mdi:fire" });
+  if (cold) modes.push(cold);
+  if (heat) modes.push(heat);
   if (modes.length) out.modes = modes;
   else delete out.modes;
+  for (const k of Object.keys(out)) if (/^mode_(cold|heat)_temp_\d+$/.test(k)) delete out[k];
 
   if (d.timer_entity) {
     const t = { entity: d.timer_entity };
@@ -1624,6 +1815,13 @@ function createRoomForm(getConfig, getHass, onChange) {
       const id = fanIds(getConfig().fans)[Number(m[1])];
       const st = id && hass && hass.states[id];
       return `${L.fan_name} ${(st && st.attributes.friendly_name) || id || ""}`;
+    }
+    const t = /^mode_(cold|heat)_temp_(\d+)$/.exec(schema.name || "");
+    if (t) {
+      const modo = normModes(getConfig().modes)[t[1] === "cold" ? 0 : 1];
+      const id = modo && normEntries(modo.steps)[Number(t[2])] && normEntries(modo.steps)[Number(t[2])].entity;
+      const st = id && hass && hass.states[id];
+      return `${L.step_temp} ${(st && st.attributes.friendly_name) || id || ""} ${L.step_temp_hint}`;
     }
     return L[schema.name] || schema.name;
   };
@@ -1788,7 +1986,7 @@ class AcRoomsCard extends HTMLElement {
   }
 
   _modos(r) {
-    return normEntries(r.modes);
+    return normModes(r.modes);
   }
 
   /* Se puede prender y apagar: tiene equipo o tiene modos. */
@@ -1802,7 +2000,7 @@ class AcRoomsCard extends HTMLElement {
   _existe(r) {
     const modos = this._modos(r);
     if (modos.length) {
-      return modos.some((m) => !!this._hass.states[m.entity]) ||
+      return modos.some((m) => modeSteps(this._hass, m).some((p) => !!this._hass.states[p.entity])) ||
         !!(r.off_entity && this._hass.states[r.off_entity]);
     }
     if (r.entity) return !!this._hass.states[r.entity];
@@ -1825,7 +2023,8 @@ class AcRoomsCard extends HTMLElement {
       const activo = modos[activeModeIndex(this._hass, modos, r.off_entity)];
       if (!activo) return null;
       if (activo.hvac) return activo.hvac;
-      const txt = ((activo.name || "") + " " + activo.entity).toLowerCase();
+      const ids = modeSteps(this._hass, activo).map((p) => p.entity).join(" ");
+      const txt = ((activo.name || "") + " " + ids).toLowerCase();
       if (/heat|calor|calef/.test(txt)) return "heat";
       if (/cool|frio|fr\u00edo|cold/.test(txt)) return "cool";
       return null;
@@ -1875,8 +2074,16 @@ class AcRoomsCard extends HTMLElement {
     const attr = (k) => (st && st.attributes[k] !== undefined && st.attributes[k] !== null
       ? dec(st.attributes[k]) : null);
     const rs = r.temp_entity && this._hass.states[r.temp_entity];
+    // Sin climate, la consigna es la temperatura de la escena en marcha.
+    let consigna = attr("temperature");
+    const modos = this._modos(r);
+    if (consigna === null && modos.length) {
+      const a = activeModeStep(this._hass, modos, r.off_entity);
+      const paso = a.mode >= 0 ? modeSteps(this._hass, modos[a.mode])[a.step] : null;
+      if (paso && paso.num !== null) consigna = dec(paso.num);
+    }
     return {
-      target: attr("temperature"),
+      target: consigna,
       actual: attr("current_temperature"),
       real: rs && !["unavailable", "unknown"].includes(rs.state) ? dec(rs.state) : null,
     };

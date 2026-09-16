@@ -678,8 +678,9 @@ ok("lista vacia quita la clave", sinFans.fans === undefined, sinFans.fans);
 
 const cfgModes = { type: "custom:ac-room-card", entity: "input_boolean.frio", modes: MODES };
 const flatM = ED.toForm(cfgModes);
-ok("aplana el boolean de frio", flatM.mode_cold_entity === "input_boolean.frio", flatM);
-ok("aplana el boolean de calor", flatM.mode_heat_entity === "input_boolean.calor", flatM);
+// Cada modo va como lista: desde 0.34.0 un modo puede tener varias escenas.
+ok("aplana el boolean de frio", JSON.stringify(flatM.mode_cold_entity) === '["input_boolean.frio"]', flatM);
+ok("aplana el boolean de calor", JSON.stringify(flatM.mode_heat_entity) === '["input_boolean.calor"]', flatM);
 const backM = ED.fromForm(cfgModes, flatM);
 ok("reconstruye modes con nombre e icono", JSON.stringify(backM.modes) === JSON.stringify(MODES), backM.modes);
 const soloFrio = ED.fromForm(cfgModes, { ...flatM, mode_heat_entity: "" });
