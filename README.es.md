@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.34.2-blue.svg)
+![version](https://img.shields.io/badge/version-0.35.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -75,6 +75,11 @@ Las dos vienen en el mismo `.js`: una sola instalación te da ambas.
 La tarjeta se configura entera **desde la interfaz**. Agrégala, elige tu entidad
 de clima y completa los sensores que tengas. Todo es opcional salvo `entity`, y
 lo que no pones se oculta solo.
+
+El editor deja a la vista el equipo, la vista de arriba y el nombre, y pliega lo
+demás en secciones: **Sensores de la pieza**, **Ventanas y avisos**, **Corte de
+corriente**, **Ventiladores**, **Aire por IR (sin climate)** y **Temporizador de
+apagado**. Una sección que ya tiene algo configurado se abre sola.
 
 Mínima:
 

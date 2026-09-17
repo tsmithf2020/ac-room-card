@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.34.2-blue.svg)
+![version](https://img.shields.io/badge/version-0.35.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -72,6 +72,11 @@ Both ship in the same `.js`, so one install gives you both.
 The card is fully configurable **from the UI**. Add it, pick your climate entity,
 and fill in whatever sensors you have. Everything except `entity` is optional and
 hides itself when absent.
+
+The editor keeps the unit, the top view and the title in sight, and folds the
+rest into sections: **Room sensors**, **Windows and warnings**, **Power cut**,
+**Fans**, **IR unit (no climate)** and **Shutdown timer**. A section that already
+has something set opens by itself.
 
 Minimal:
 

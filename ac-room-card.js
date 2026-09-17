@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.34.2";
+const VERSION = "0.35.0";
 
 const T = {
   pwOn: "con corriente",
@@ -1512,24 +1512,57 @@ function normFans(list) {
 
 const fanIds = (list) => normFans(list).map((f) => f.entity);
 
+/* Secciones plegables del editor: que campos van en cada una, su titulo y
+   su icono. Lo basico (equipo, vista, nombre) queda siempre a la vista. */
+const EDITOR_SECTIONS = [
+  { id: "sensors", icon: "mdi:thermometer",
+    title: ["Sensores de la pieza", "Room sensors"],
+    keys: ["power_entity", "temp_entity", "lux_entity", "decimals", "energy_today_entity", "energy_month_entity"] },
+  { id: "windows", icon: "mdi:window-closed-variant",
+    title: ["Ventanas y avisos", "Windows and warnings"],
+    keys: ["window_entity", "battery_warn", "show_warning"] },
+  { id: "plug", icon: "mdi:power-plug",
+    title: ["Corte de corriente", "Power cut"],
+    keys: ["power_switch"] },
+  { id: "fans", icon: "mdi:fan",
+    title: ["Ventiladores", "Fans"],
+    keys: ["fans", "fans_position", "fan_mode"] },
+  { id: "ir", icon: "mdi:remote",
+    title: ["Aire por IR (sin climate): modos y escenas", "IR unit (no climate): modes and scenes"],
+    keys: ["mode_cold_entity", "mode_heat_entity", "mode_off_entity"] },
+  { id: "timer", icon: "mdi:timer-outline",
+    title: ["Temporizador de apagado", "Shutdown timer"],
+    keys: ["timer_entity", "timer_minutes_entity", "timer_button_entity"] },
+];
+
+const conValor = (v) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== "" && v !== false);
+
 /* El esquema se arma en cada render porque los campos de nombre dependen de
-   cuantos ventiladores haya elegidos. */
-function buildSchema(config, lang = "es") {
-  const schema = baseSchema(lang);
+   cuantos ventiladores haya elegidos. Una seccion viene abierta si ya tiene
+   algo configurado, o si esta en `abiertas` (el editor recuerda las que abrio,
+   para no cerrarle una en la cara al vaciar su ultimo campo). */
+function buildSchema(config, lang = "es", abiertas = null) {
+  const c = config || {};
+  const campos = baseFields(lang);
   // "Card propio" solo aparece si ya hay un base_card escrito en YAML: desde
   // el formulario no se puede armar uno.
   const opciones = viewOptions(lang);
-  if (resolveView(config) === "custom") {
-    const tipo = config.base_card.type || "base_card";
+  if (resolveView(c) === "custom") {
+    const tipo = c.base_card.type || "base_card";
     opciones.push({ value: "custom", label: tr(lang, `Card propio en YAML (${tipo})`, `Own card in YAML (${tipo})`) });
   }
-  schema.splice(1, 0, { name: "", type: "grid", schema: [
-    { name: "base_view", selector: { select: { mode: "dropdown", options: opciones } } },
-    { name: "mode_buttons", selector: { boolean: {} } },
-  ]});
+  const top = [
+    campos.entity,
+    { name: "", type: "grid", schema: [
+      { name: "base_view", selector: { select: { mode: "dropdown", options: opciones } } },
+      { name: "mode_buttons", selector: { boolean: {} } },
+    ]},
+    { name: "", type: "grid", schema: [campos.name, campos.icon] },
+  ];
+
   // Un modo con varias escenas pide la temperatura de cada una, para las
   // flechas. Vacia, se usa el numero del nombre de la escena.
-  const modos = normModes((config || {}).modes);
+  const modos = normModes(c.modes);
   const tempsDe = (idx, clave) => {
     const pasos = normEntries(modos[idx] && modos[idx].steps);
     return pasos.length > 1
@@ -1537,19 +1570,50 @@ function buildSchema(config, lang = "es") {
       : [];
   };
   const temps = [...tempsDe(0, "mode_cold"), ...tempsDe(1, "mode_heat")];
-  if (temps.length) {
-    const pos = schema.findIndex((s) => s.name === "mode_off_entity");
-    schema.splice(pos + 1, 0, { name: "", type: "grid", schema: temps });
-  }
-  const fans = fanIds((config || {}).fans);
-  if (fans.length) {
-    schema.push({
-      name: "",
-      type: "grid",
-      schema: fans.map((_, i) => ({ name: `fan_name_${i}`, selector: { text: {} } })),
-    });
-  }
-  return schema;
+  const fans = fanIds(c.fans);
+
+  const contenido = {
+    sensors: [
+      { name: "", type: "grid", schema: [campos.power_entity, campos.temp_entity] },
+      { name: "", type: "grid", schema: [campos.lux_entity, campos.decimals] },
+      { name: "", type: "grid", schema: [campos.energy_today_entity, campos.energy_month_entity] },
+    ],
+    windows: [
+      campos.window_entity,
+      { name: "", type: "grid", schema: [campos.battery_warn, campos.show_warning] },
+    ],
+    plug: [
+      { name: "", type: "grid", schema: [campos.power_switch, campos.power_switch_confirm] },
+    ],
+    fans: [
+      campos.fans,
+      ...(fans.length ? [{ name: "", type: "grid",
+        schema: fans.map((_, i) => ({ name: `fan_name_${i}`, selector: { text: {} } })) }] : []),
+      { name: "", type: "grid", schema: [campos.fans_position, campos.fan_mode] },
+    ],
+    ir: [
+      { name: "", type: "grid", schema: [campos.mode_cold_entity, campos.mode_heat_entity] },
+      ...(temps.length ? [{ name: "", type: "grid", schema: temps }] : []),
+      campos.mode_off_entity,
+    ],
+    timer: [
+      { name: "", type: "grid", schema: [campos.timer_entity, campos.timer_minutes_entity] },
+      campos.timer_button_entity,
+    ],
+  };
+
+  const datos = toForm(c);
+  const secciones = EDITOR_SECTIONS.map((s) => {
+    const abierta = s.keys.some((k) => conValor(datos[k])) || !!(abiertas && abiertas.has(s.id));
+    if (abierta && abiertas) abiertas.add(s.id);
+    return {
+      name: "", type: "expandable", flatten: true,
+      title: lang === "en" ? s.title[1] : s.title[0],
+      icon: s.icon, expanded: abierta,
+      schema: contenido[s.id],
+    };
+  });
+  return [...top, ...secciones];
 }
 
 const viewOptions = (lang) => [
@@ -1558,51 +1622,35 @@ const viewOptions = (lang) => [
   { value: "none", label: tr(lang, "Ninguna: solo el encabezado y las filas", "None: just the title and the data rows") },
 ];
 
-const baseSchema = (lang) => [
-  { name: "entity",
-    selector: { entity: { domain: ["climate", "input_boolean", "switch"] } } },
-  { name: "", type: "grid", schema: [
-    { name: "name", selector: { text: {} } },
-    { name: "icon", selector: { icon: {} } },
-  ]},
-  { name: "", type: "grid", schema: [
-    { name: "power_entity", selector: { entity: { domain: "sensor", device_class: "power" } } },
-    { name: "temp_entity", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
-  ]},
-  { name: "", type: "grid", schema: [
-    { name: "lux_entity", selector: { entity: { domain: "sensor", device_class: "illuminance" } } },
-    { name: "decimals", selector: { number: { min: 0, max: 3, step: 1, mode: "box" } } },
-  ]},
-  { name: "", type: "grid", schema: [
-    { name: "power_switch", selector: { entity: { domain: ["switch", "light", "input_boolean"] } } },
-    { name: "power_switch_confirm", selector: { boolean: {} } },
-  ]},
-  { name: "", type: "grid", schema: [
-    { name: "mode_cold_entity", selector: { entity: { domain: MODE_DOMAINS, multiple: true } } },
-    { name: "mode_heat_entity", selector: { entity: { domain: MODE_DOMAINS, multiple: true } } },
-  ]},
-  { name: "mode_off_entity", selector: { entity: { domain: ["scene", "script", "button", "input_button"] } } },
-  { name: "window_entity", selector: { entity: { domain: "binary_sensor", multiple: true } } },
-  { name: "fans", selector: { entity: { domain: ["fan", "switch", "light"], multiple: true } } },
-  { name: "fans_position", selector: { select: { mode: "dropdown", options: [
-      { value: "inline", label: tr(lang, "En la línea de datos (por defecto)", "On the data line (default)") },
-      { value: "auto", label: tr(lang, "Uno en la línea, varios en fila propia", "One on the line, several on their own row") },
-      { value: "row", label: tr(lang, "Siempre en fila propia", "Always on their own row") }] } } },
-  { name: "", type: "grid", schema: [
-    { name: "energy_today_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
-    { name: "energy_month_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
-  ]},
-  { name: "", type: "grid", schema: [
-    { name: "timer_entity", selector: { entity: { domain: "timer" } } },
-    { name: "timer_minutes_entity", selector: { entity: { domain: "input_number" } } },
-  ]},
-  { name: "timer_button_entity", selector: { entity: { domain: "input_button" } } },
-  { name: "", type: "grid", schema: [
-    { name: "battery_warn", selector: { number: { min: 0, max: 100, step: 5, mode: "box" } } },
-    { name: "fan_mode", selector: { boolean: {} } },
-    { name: "show_warning", selector: { boolean: {} } },
-  ]},
-];
+/* Cada campo del editor, por nombre. buildSchema los acomoda en secciones. */
+const baseFields = (lang) => ({
+  entity: { name: "entity", selector: { entity: { domain: ["climate", "input_boolean", "switch"] } } },
+  name: { name: "name", selector: { text: {} } },
+  icon: { name: "icon", selector: { icon: {} } },
+  power_entity: { name: "power_entity", selector: { entity: { domain: "sensor", device_class: "power" } } },
+  temp_entity: { name: "temp_entity", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
+  lux_entity: { name: "lux_entity", selector: { entity: { domain: "sensor", device_class: "illuminance" } } },
+  decimals: { name: "decimals", selector: { number: { min: 0, max: 3, step: 1, mode: "box" } } },
+  power_switch: { name: "power_switch", selector: { entity: { domain: ["switch", "light", "input_boolean"] } } },
+  power_switch_confirm: { name: "power_switch_confirm", selector: { boolean: {} } },
+  mode_cold_entity: { name: "mode_cold_entity", selector: { entity: { domain: MODE_DOMAINS, multiple: true } } },
+  mode_heat_entity: { name: "mode_heat_entity", selector: { entity: { domain: MODE_DOMAINS, multiple: true } } },
+  mode_off_entity: { name: "mode_off_entity", selector: { entity: { domain: ["scene", "script", "button", "input_button"] } } },
+  window_entity: { name: "window_entity", selector: { entity: { domain: "binary_sensor", multiple: true } } },
+  fans: { name: "fans", selector: { entity: { domain: ["fan", "switch", "light"], multiple: true } } },
+  fans_position: { name: "fans_position", selector: { select: { mode: "dropdown", options: [
+    { value: "inline", label: tr(lang, "En la línea de datos (por defecto)", "On the data line (default)") },
+    { value: "auto", label: tr(lang, "Uno en la línea, varios en fila propia", "One on the line, several on their own row") },
+    { value: "row", label: tr(lang, "Siempre en fila propia", "Always on their own row") }] } } },
+  energy_today_entity: { name: "energy_today_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
+  energy_month_entity: { name: "energy_month_entity", selector: { entity: { domain: "sensor", device_class: "energy" } } },
+  timer_entity: { name: "timer_entity", selector: { entity: { domain: "timer" } } },
+  timer_minutes_entity: { name: "timer_minutes_entity", selector: { entity: { domain: "input_number" } } },
+  timer_button_entity: { name: "timer_button_entity", selector: { entity: { domain: "input_button" } } },
+  battery_warn: { name: "battery_warn", selector: { number: { min: 0, max: 100, step: 5, mode: "box" } } },
+  fan_mode: { name: "fan_mode", selector: { boolean: {} } },
+  show_warning: { name: "show_warning", selector: { boolean: {} } },
+});
 
 /* El formulario es plano; la config guarda el timer anidado. Estas dos
    funciones traducen entre ambos y son las que cubren los tests. */
@@ -1849,7 +1897,8 @@ function createRoomForm(getConfig, getHass, onChange) {
 
 function refreshRoomForm(form, config, hass) {
   form.hass = hass;
-  form.schema = buildSchema(config, langOf(hass));
+  if (!form._abiertas) form._abiertas = new Set();
+  form.schema = buildSchema(config, langOf(hass), form._abiertas);
   form.data = toForm(config);
 }
 
