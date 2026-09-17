@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.37.0";
+const VERSION = "0.38.0";
 
 const T = {
   pwOn: "con corriente",
@@ -1686,13 +1686,8 @@ const EDITOR_SECTIONS = [
   { id: "autos", icon: "mdi:robot-outline",
     title: ["Automatizaciones", "Automations"],
     help: [
-      "Lo que maneja este aire por su cuenta: la automatización misma, o el interruptor (input_boolean) " +
-      "que la habilita, como un «Control Verano». Van en la línea de datos: con color si están activas, " +
-      "en gris si no, y latiendo mientras corren. Tócalas para activarlas o desactivarlas; pasa el cursor " +
-      "para ver cuándo corrieron por última vez.",
-      "What runs this unit on its own: the automation itself, or the switch (input_boolean) that enables " +
-      "it, like a \"Summer control\". They sit on the data line: coloured when enabled, grey when not, and " +
-      "pulsing while they run. Tap to enable or disable; hover to see when they last ran.",
+      "Las automatizaciones, o sus interruptores, que manejan este aire.",
+      "The automations, or their switches, that run this unit.",
     ],
     keys: ["automations"] },
   { id: "ir", icon: "mdi:remote",
@@ -2098,10 +2093,148 @@ function refreshRoomForm(form, config, hass) {
   form.data = toForm(config);
 }
 
+/* ---------- crear el temporizador desde el editor ---------- */
+
+/* Lo que apaga el aire, como acciones de una automatizacion. Un climate se
+   apaga; un aire por IR dispara su escena de Apagar o baja sus booleans.
+   Sin nada de eso no hay como apagarlo y se devuelve null. */
+function timerOffActions(cfg) {
+  const c = cfg || {};
+  const d = domainOf(c.entity);
+  if (d === "climate") return [{ action: "climate.turn_off", target: { entity_id: c.entity } }];
+  if (c.off_entity) {
+    const od = domainOf(c.off_entity);
+    const srv = od === "button" || od === "input_button" ? "press" : "turn_on";
+    return [{ action: `${od}.${srv}`, target: { entity_id: c.off_entity } }];
+  }
+  const booleans = normModes(c.modes).filter(modeIsStateful).map((m) => m.entity);
+  if (!booleans.length && ["input_boolean", "switch"].includes(d)) booleans.push(c.entity);
+  return booleans.length
+    ? [{ action: "homeassistant.turn_off", target: { entity_id: [...new Set(booleans)] } }]
+    : null;
+}
+
+const puedeCrearTimer = (cfg) => !(cfg && cfg.timer && cfg.timer.entity) && !!timerOffActions(cfg);
+
+/* Crea en Home Assistant lo que el temporizador necesita, con la misma API
+   que usa su interfaz: los minutos (input_number), el timer y la
+   automatizacion que apaga el aire al terminar y cancela la cuenta si lo
+   apagan a mano. Pide ser administrador. Devuelve la config con `timer`. */
+async function crearTemporizador(hass, cfg, lang = "es") {
+  if (!hass || !hass.user || !hass.user.is_admin) {
+    throw new Error(tr(lang, "Solo un administrador de Home Assistant puede crearlo.",
+      "Only a Home Assistant administrator can create it."));
+  }
+  const apagar = timerOffActions(cfg);
+  if (!apagar) {
+    throw new Error(tr(lang, "Primero elige el equipo, o sus modos IR con Apagar.",
+      "Pick the unit first, or its IR modes with Turn off."));
+  }
+  const st = cfg.entity && hass.states[cfg.entity];
+  const nombre = cfg.name || (st && st.attributes.friendly_name) ||
+    (cfg.entity ? cfg.entity.split(".")[1] : tr(lang, "aire", "AC"));
+
+  const minutos = await hass.callWS({
+    type: "input_number/create",
+    name: tr(lang, `Apagar ${nombre} en`, `Turn off ${nombre} in`),
+    min: 0, max: 480, step: 15, initial: 60, mode: "slider",
+    unit_of_measurement: "min", icon: "mdi:timer-cog-outline",
+  });
+  const timer = await hass.callWS({
+    type: "timer/create",
+    name: tr(lang, `Temporizador ${nombre}`, `${nombre} timer`),
+    duration: "00:00:00", restore: true, icon: "mdi:timer-outline",
+  });
+  const timerEntity = `timer.${timer.id}`;
+  const minutesEntity = `input_number.${minutos.id}`;
+
+  const triggers = [{ trigger: "event", event_type: "timer.finished",
+    event_data: { entity_id: timerEntity }, id: "finished" }];
+  const opciones = [{ conditions: [{ condition: "trigger", id: "finished" }], sequence: apagar }];
+  // Si lo apagan a mano antes, la cuenta sobra. Solo con algo que tenga
+  // estado on/off que mirar: un climate o el boolean del equipo.
+  if (["climate", "input_boolean", "switch"].includes(domainOf(cfg.entity))) {
+    triggers.push({ trigger: "state", entity_id: cfg.entity, to: "off",
+      not_from: ["unavailable", "unknown"], id: "manual_off" });
+    opciones.push({
+      conditions: [{ condition: "trigger", id: "manual_off" },
+        { condition: "state", entity_id: timerEntity, state: "active" }],
+      sequence: [{ action: "timer.cancel", target: { entity_id: timerEntity } }],
+    });
+  }
+  const autoId = `ac_room_card_${timer.id}`;
+  await hass.callApi("POST", `config/automation/config/${autoId}`, {
+    id: autoId,
+    alias: tr(lang, `Apagar ${nombre} al terminar el temporizador`, `Turn off ${nombre} when its timer ends`),
+    description: tr(lang, "Creada por AC Room Card.", "Created by AC Room Card."),
+    mode: "single",
+    triggers,
+    conditions: [],
+    actions: [{ choose: opciones }],
+  });
+  return {
+    ...cfg,
+    timer: { entity: timerEntity, minutes_entity: minutesEntity },
+    creados: { minutos: minutesEntity, timer: timerEntity, automatizacion: `automation (${autoId})` },
+  };
+}
+
+/* El boton "Crear temporizador" con su linea de estado. Se muestra solo si
+   la tarjeta tiene como apagar el aire y todavia no tiene timer. */
+function createTimerButton(getConfig, getHass, onChange) {
+  const box = document.createElement("div");
+  box.style.cssText = "display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 4px 0";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.style.cssText = "display:inline-flex;align-items:center;gap:6px;cursor:pointer;font:inherit;" +
+    "padding:6px 12px;border-radius:8px;border:1px solid var(--primary-color,#03a9f4);" +
+    "background:transparent;color:var(--primary-color,#03a9f4)";
+  btn.innerHTML = `<ha-icon icon="mdi:timer-plus-outline"></ha-icon><span></span>`;
+  const estado = document.createElement("span");
+  estado.style.cssText = "font-size:12px;color:var(--secondary-text-color)";
+  box.appendChild(btn);
+  box.appendChild(estado);
+
+  let ocupado = false;
+  btn.addEventListener("click", async () => {
+    if (ocupado) return;
+    const hass = getHass();
+    const lang = langOf(hass);
+    ocupado = true;
+    btn.disabled = true;
+    estado.style.color = "var(--secondary-text-color)";
+    estado.textContent = tr(lang, "Creando…", "Creating…");
+    try {
+      const { creados, ...cfg } = await crearTemporizador(hass, getConfig(), lang);
+      estado.textContent = tr(lang, `Listo: ${creados.timer}, ${creados.minutos} y la automatización.`,
+        `Done: ${creados.timer}, ${creados.minutos} and the automation.`);
+      onChange(cfg);
+    } catch (e) {
+      estado.style.color = "var(--error-color,#db4437)";
+      estado.textContent = (e && (e.message || e.body && e.body.message)) || String(e);
+    } finally {
+      ocupado = false;
+      btn.disabled = false;
+    }
+  });
+
+  const refresh = () => {
+    const lang = langOf(getHass());
+    const txt = btn.querySelector("span");
+    if (txt) txt.textContent = tr(lang, "Crear temporizador", "Create timer");
+    // Tras crearlo se esconde el boton pero queda a la vista el "Listo".
+    btn.style.display = puedeCrearTimer(getConfig()) ? "" : "none";
+    box.style.display = btn.style.display === "none" && !estado.textContent ? "none" : "flex";
+  };
+  return { root: box, refresh };
+}
+
 class AcRoomCardEditor extends HTMLElement {
   static get toForm() { return toForm; }
   static get buildSchema() { return buildSchema; }
   static get fromForm() { return fromForm; }
+  static get crearTemporizador() { return crearTemporizador; }
+  static get timerOffActions() { return timerOffActions; }
 
   setConfig(config) {
     this._config = config || {};
@@ -2124,11 +2257,21 @@ class AcRoomCardEditor extends HTMLElement {
       });
       this.appendChild(this._form);
 
+      this._timerBtn = createTimerButton(() => this._config, () => this._hass, (cfg) => {
+        this._config = cfg;
+        this.dispatchEvent(new CustomEvent("config-changed", {
+          detail: { config: cfg }, bubbles: true, composed: true,
+        }));
+        this._render();
+      });
+      this.appendChild(this._timerBtn.root);
+
       this._note = document.createElement("div");
       this._note.style.cssText = "padding:8px 4px 0;font-size:12px;color:var(--secondary-text-color)";
       this.appendChild(this._note);
     }
     refreshRoomForm(this._form, this._config, this._hass);
+    this._timerBtn.refresh();
     this._note.textContent = editorNote(this._config, langOf(this._hass));
   }
 }
@@ -3160,17 +3303,21 @@ class AcRoomsCardEditor extends HTMLElement {
           "color:var(--error-color,#db4437);font:inherit;display:flex;align-items:center;gap:6px;padding:0";
         quitar.innerHTML = `<ha-icon icon="mdi:delete-outline"></ha-icon><span></span>`;
         quitar.addEventListener("click", () => this._quitarPieza(i));
+        const timer = createTimerButton(() => this._config.rooms[i], () => this._hass,
+          (room) => this._cambioPieza(i, room));
         panel.appendChild(form);
+        panel.appendChild(timer.root);
         panel.appendChild(quitar);
         this._piezasBox.appendChild(panel);
-        return { panel, form, quitar };
+        return { panel, form, quitar, timer };
       });
     }
-    this._lista.forEach(({ panel, form, quitar }, i) => {
+    this._lista.forEach(({ panel, form, quitar, timer }, i) => {
       panel.header = this._tituloPieza(rooms[i]);
       const txt = quitar.querySelector("span");
       if (txt) txt.textContent = ROOMS_LABELS[lang].remove;
       refreshRoomForm(form, rooms[i], this._hass);
+      timer.refresh();
     });
   }
 

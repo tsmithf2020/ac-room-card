@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.37.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.38.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -319,10 +319,32 @@ Un desplegable con las velocidades que declara la entidad `climate` (`silent`,
 
 ## Temporizador
 
-> **Esto no funciona solo.** Home Assistant no trae un temporizador de apagado
-> para las entidades de clima: necesitas tres ayudantes y una automatización. La
-> tarjeta dibuja y maneja la cuenta regresiva, **pero es la automatización la que
-> apaga el aire.** Abajo está todo lo que necesitas.
+Home Assistant no trae un temporizador de apagado para las entidades de clima:
+hacen falta ayudantes y una automatización. La tarjeta dibuja y maneja la cuenta
+regresiva, **pero es la automatización la que apaga el aire.**
+
+### La forma rápida: un botón
+
+En el editor visual, bajo la sección del temporizador, toca **Crear
+temporizador**. La tarjeta crea, con la misma API de Home Assistant:
+
+| Qué | Para qué |
+|---|---|
+| `input_number` *Apagar … en* (0–480 min, de 15 en 15) | los minutos, con los botones − / + |
+| `timer` *Temporizador …* | la cuenta regresiva |
+| automatización *Apagar … al terminar el temporizador* | apaga el aire cuando termina la cuenta, y la cancela si lo apagas a mano antes |
+
+…y te deja `timer` configurado. Necesita un **administrador** de Home Assistant.
+Sirve también para aires por IR: la automatización dispara la escena de
+**Apagar** o baja los booleans de los modos. El mismo botón está en el panel de
+cada pieza del editor de AC Rooms. Todo lo que crea son ayudantes y
+automatizaciones normales, así que después puedes renombrarlos o editarlos en
+Ajustes.
+
+### La forma manual
+
+Si prefieres armarlo tú, o quieres un `input_button` para que tu propia
+automatización decida si el temporizador puede arrancar:
 
 ### 1. Crea los ayudantes
 
@@ -869,6 +891,7 @@ node test/modes_i18n.js   # modos con escenas y botones, botones de modo e idiom
 node test/steps.js        # varias escenas por modo y las flechas de temperatura
 node test/vendor.js       # el bloque de mini-climate incluido
 node test/automations.js  # automatizaciones: estado, tooltip, sección del editor y mudanza desde fans
+node test/timer_create.js # el botón Crear temporizador: ayudantes, automatización y config
 ```
 
 Sin navegador: un shim mínimo de DOM prueba el formato de los valores, que los

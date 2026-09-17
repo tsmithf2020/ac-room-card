@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.37.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.38.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -312,10 +312,31 @@ A dropdown with the speeds the `climate` entity declares (`silent`, `low`,
 
 ## Timer
 
-> **This does not work on its own.** Home Assistant has no built-in shutdown
-> timer for climate entities: you need three helpers and one automation. The card
-> draws and drives the countdown, **but it is the automation that turns the unit
-> off.** Everything you need is below.
+Home Assistant has no built-in shutdown timer for climate entities: it takes
+helpers and an automation. The card draws and drives the countdown, **but it is
+the automation that turns the unit off.**
+
+### The quick way: one button
+
+In the visual editor, under the timer section, tap **Create timer**. The card
+creates, through Home Assistant's own API:
+
+| What | For |
+|---|---|
+| `input_number` *Turn off … in* (0–480 min, steps of 15) | the minutes, with the − / + buttons |
+| `timer` *… timer* | the countdown |
+| automation *Turn off … when its timer ends* | turns the unit off when the timer finishes, and cancels the countdown if you switch the unit off by hand first |
+
+…and fills in `timer` for you. It needs a Home Assistant **administrator**. It
+works for IR units too: the automation fires the **Turn off** scene, or switches
+the mode booleans off. The same button sits in each room's panel in the AC Rooms
+editor. Everything it creates is a normal helper and automation, so you can
+rename or edit them afterwards in Settings.
+
+### The manual way
+
+If you prefer to build it yourself, or want an `input_button` so your own
+automation decides whether the timer may start:
 
 ### 1. Create the helpers
 
@@ -847,6 +868,7 @@ node test/modes_i18n.js   # scene/button modes, mode buttons and language
 node test/steps.js        # several scenes per mode and the temperature arrows
 node test/vendor.js       # the bundled mini-climate block
 node test/automations.js  # automations: state, tooltip, editor section, moving them out of fans
+node test/timer_create.js # the Create timer button: helpers, automation, config
 ```
 
 No browser: a minimal DOM shim exercises value formatting,

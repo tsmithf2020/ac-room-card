@@ -147,7 +147,7 @@ const VIEJA = {
   const sec = esq.find((s) => s.icon === "mdi:robot-outline");
   ok("hay seccion Automatizaciones", !!sec && sec.title === "Automatizaciones", sec && sec.title);
   ok("abierta, porque ya tiene una", sec.expanded === true, sec.expanded);
-  ok("con su explicacion", /Control Verano/.test(sec.help || ""), sec.help);
+  ok("con una explicacion corta (el detalle esta en el README)", !!sec.help && sec.help.length < 90, sec.help);
   ok("y el nombre de la automatizacion dentro", JSON.stringify(sec.schema).includes("auto_name_0"), "");
   ok("el selector acepta automation, input_boolean y script",
      /"domain":\["automation","input_boolean","script"\]/.test(JSON.stringify(sec.schema)), JSON.stringify(sec.schema));
