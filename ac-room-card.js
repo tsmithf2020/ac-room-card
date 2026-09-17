@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.35.0";
+const VERSION = "0.35.1";
 
 const T = {
   pwOn: "con corriente",
@@ -1422,66 +1422,68 @@ class AcRoomCard extends HTMLElement {
 
 /* ---------- editor visual ---------- */
 
+// Etiquetas cortas: la seccion ya dice de que se trata. Lo que necesita
+// explicacion va en el texto de la seccion (EDITOR_SECTIONS.help).
 const EDITOR_LABELS = {
   es: {
-    entity: "Equipo (opcional: sin él, no se dibuja tarjeta arriba)",
+    entity: "Equipo",
     base_view: "Vista de arriba",
-    mode_buttons: "Botones de modo bajo el termostato (apagado, frío, calor…)",
-    name: "Nombre que se muestra arriba",
-    battery_warn: "Avisar pila baja bajo (%)",
-    fans: "Ventiladores (uno va en la línea; dos o más, en su propia fila)",
-    fan_mode: "Mostrar la velocidad del ventilador del equipo",
-    fans_position: "Dónde van los ventiladores",
-    mode_cold_entity: "Modo FRÍO: boolean, escena, script o botón (varias escenas = flechas de temperatura)",
-    mode_heat_entity: "Modo CALOR (opcional; también acepta varias escenas)",
-    step_temp: "Temperatura de",
-    step_temp_hint: "(vacío = el número del nombre)",
-    mode_off_entity: "APAGAR: escena, script o botón (opcional)",
-    icon: "Ícono del encabezado (opcional)",
+    mode_buttons: "Botones de modo",
+    name: "Nombre",
+    icon: "Ícono",
     power_entity: "Potencia",
-    temp_entity: "Temperatura de la pieza",
-    decimals: "Decimales de temperatura (vacío = como venga el sensor)",
-    power_switch: "Enchufe que corta la corriente del equipo",
-    power_switch_confirm: "Pedir dos toques antes de cortar",
-    lux_entity: "Luz de la pieza",
-    window_entity: "Sensor de ventana",
+    temp_entity: "Temperatura",
+    lux_entity: "Luz",
+    decimals: "Decimales",
+    decimals_help: "Vacío = como venga el sensor",
     energy_today_entity: "Energía de hoy",
     energy_month_entity: "Energía del mes",
-    timer_entity: "Temporizador",
+    window_entity: "Sensores de ventana",
+    battery_warn: "Pila baja bajo (%)",
+    show_warning: "Aviso de texto con ventana abierta",
+    power_switch: "Enchufe del equipo",
+    power_switch_confirm: "Cortar con dos toques",
+    fans: "Ventiladores",
+    fans_position: "Posición",
+    fan_mode: "Velocidad del equipo",
+    fan_name: "Nombre de",
+    mode_cold_entity: "Frío",
+    mode_heat_entity: "Calor",
+    mode_off_entity: "Apagar",
+    step_temp: "°C",
+    timer_entity: "Timer",
     timer_minutes_entity: "Minutos (input_number)",
     timer_button_entity: "Botón que dispara tu automatización",
-    show_warning: "Avisar por texto si la ventana está abierta con el aire andando",
-    fan_name: "Nombre de",
   },
   en: {
-    entity: "Unit (optional: without it, no card is drawn on top)",
+    entity: "Unit",
     base_view: "Top view",
-    mode_buttons: "Mode buttons under the thermostat (off, cool, heat…)",
-    name: "Title shown on top",
-    battery_warn: "Low battery warning below (%)",
-    fans: "Fans (one goes on the data line; two or more, on their own row)",
-    fan_mode: "Show the unit's own fan speed",
-    fans_position: "Where the fans go",
-    mode_cold_entity: "COOL mode: boolean, scene, script or button (several scenes = temperature arrows)",
-    mode_heat_entity: "HEAT mode (optional; also takes several scenes)",
-    step_temp: "Temperature of",
-    step_temp_hint: "(empty = the number in its name)",
-    mode_off_entity: "TURN OFF: scene, script or button (optional)",
-    icon: "Title icon (optional)",
+    mode_buttons: "Mode buttons",
+    name: "Title",
+    icon: "Icon",
     power_entity: "Power",
-    temp_entity: "Room temperature",
-    decimals: "Temperature decimals (empty = as the sensor reports)",
-    power_switch: "Plug that cuts the unit's power",
-    power_switch_confirm: "Ask for two taps before cutting",
-    lux_entity: "Room light",
-    window_entity: "Window sensor",
+    temp_entity: "Temperature",
+    lux_entity: "Light",
+    decimals: "Decimals",
+    decimals_help: "Empty = as the sensor reports",
     energy_today_entity: "Energy today",
     energy_month_entity: "Energy this month",
+    window_entity: "Window sensors",
+    battery_warn: "Low battery below (%)",
+    show_warning: "Text warning with a window open",
+    power_switch: "Unit's plug",
+    power_switch_confirm: "Cut with two taps",
+    fans: "Fans",
+    fans_position: "Position",
+    fan_mode: "Unit's fan speed",
+    fan_name: "Name of",
+    mode_cold_entity: "Cool",
+    mode_heat_entity: "Heat",
+    mode_off_entity: "Turn off",
+    step_temp: "°C",
     timer_entity: "Timer",
     timer_minutes_entity: "Minutes (input_number)",
     timer_button_entity: "Button that fires your automation",
-    show_warning: "Text warning when a window is open while the AC runs",
-    fan_name: "Name of",
   },
 };
 
@@ -1516,22 +1518,32 @@ const fanIds = (list) => normFans(list).map((f) => f.entity);
    su icono. Lo basico (equipo, vista, nombre) queda siempre a la vista. */
 const EDITOR_SECTIONS = [
   { id: "sensors", icon: "mdi:thermometer",
-    title: ["Sensores de la pieza", "Room sensors"],
+    title: ["Sensores", "Sensors"],
     keys: ["power_entity", "temp_entity", "lux_entity", "decimals", "energy_today_entity", "energy_month_entity"] },
   { id: "windows", icon: "mdi:window-closed-variant",
-    title: ["Ventanas y avisos", "Windows and warnings"],
+    title: ["Ventanas", "Windows"],
     keys: ["window_entity", "battery_warn", "show_warning"] },
   { id: "plug", icon: "mdi:power-plug",
-    title: ["Corte de corriente", "Power cut"],
+    title: ["Enchufe", "Plug"],
     keys: ["power_switch"] },
   { id: "fans", icon: "mdi:fan",
     title: ["Ventiladores", "Fans"],
     keys: ["fans", "fans_position", "fan_mode"] },
   { id: "ir", icon: "mdi:remote",
-    title: ["Aire por IR (sin climate): modos y escenas", "IR unit (no climate): modes and scenes"],
+    title: ["Aire IR", "IR unit"],
+    help: [
+      "Para aires sin entidad climate. Cada modo puede ser un boolean, una escena, un script o un botón. " +
+      "Si eliges varias escenas en un modo (una por temperatura), aparecen flechas ▲▼ para pasar entre ellas; " +
+      "la temperatura sale del número del nombre, o la escribes en su casilla. «Turb» y «Swing» en el nombre " +
+      "se marcan con T y S. Apagar es la escena que apaga el aire.",
+      "For units without a climate entity. Each mode can be a boolean, scene, script or button. " +
+      "Pick several scenes for a mode (one per temperature) and ▲▼ arrows appear to move between them; " +
+      "the temperature comes from the number in the name, or type it in its box. \"Turb\" and \"Swing\" in the " +
+      "name are marked T and S. Turn off is the scene that switches the unit off.",
+    ],
     keys: ["mode_cold_entity", "mode_heat_entity", "mode_off_entity"] },
   { id: "timer", icon: "mdi:timer-outline",
-    title: ["Temporizador de apagado", "Shutdown timer"],
+    title: ["Temporizador", "Timer"],
     keys: ["timer_entity", "timer_minutes_entity", "timer_button_entity"] },
 ];
 
@@ -1606,12 +1618,15 @@ function buildSchema(config, lang = "es", abiertas = null) {
   const secciones = EDITOR_SECTIONS.map((s) => {
     const abierta = s.keys.some((k) => conValor(datos[k])) || !!(abiertas && abiertas.has(s.id));
     if (abierta && abiertas) abiertas.add(s.id);
-    return {
+    const sec = {
       name: "", type: "expandable", flatten: true,
       title: lang === "en" ? s.title[1] : s.title[0],
       icon: s.icon, expanded: abierta,
       schema: contenido[s.id],
     };
+    // HA muestra bajo el titulo lo que devuelva computeHelper para la seccion.
+    if (s.help) sec.help = lang === "en" ? s.help[1] : s.help[0];
+    return sec;
   });
   return [...top, ...secciones];
 }
@@ -1630,7 +1645,10 @@ const baseFields = (lang) => ({
   power_entity: { name: "power_entity", selector: { entity: { domain: "sensor", device_class: "power" } } },
   temp_entity: { name: "temp_entity", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
   lux_entity: { name: "lux_entity", selector: { entity: { domain: "sensor", device_class: "illuminance" } } },
-  decimals: { name: "decimals", selector: { number: { min: 0, max: 3, step: 1, mode: "box" } } },
+  // Deslizador y no casilla: HA dibuja el titulo ARRIBA solo en ese modo, y
+  // asi queda alineado con los selectores de entidad de al lado. La casilla
+  // chica del deslizador se puede vaciar (= como venga el sensor).
+  decimals: { name: "decimals", selector: { number: { min: 0, max: 3, step: 1, mode: "slider", slider_ticks: true } } },
   power_switch: { name: "power_switch", selector: { entity: { domain: ["switch", "light", "input_boolean"] } } },
   power_switch_confirm: { name: "power_switch_confirm", selector: { boolean: {} } },
   mode_cold_entity: { name: "mode_cold_entity", selector: { entity: { domain: MODE_DOMAINS, multiple: true } } },
@@ -1884,9 +1902,15 @@ function createRoomForm(getConfig, getHass, onChange) {
       const modo = normModes(getConfig().modes)[t[1] === "cold" ? 0 : 1];
       const id = modo && normEntries(modo.steps)[Number(t[2])] && normEntries(modo.steps)[Number(t[2])].entity;
       const st = id && hass && hass.states[id];
-      return `${L.step_temp} ${(st && st.attributes.friendly_name) || id || ""} ${L.step_temp_hint}`;
+      return `${(st && st.attributes.friendly_name) || id || ""} ${L.step_temp}`;
     }
     return L[schema.name] || schema.name;
+  };
+  form.computeHelper = (schema) => {
+    if (!schema) return undefined;
+    if (schema.type === "expandable") return schema.help;
+    if (schema.name === "decimals") return EDITOR_LABELS[langOf(getHass())].decimals_help;
+    return undefined;
   };
   form.addEventListener("value-changed", (ev) => {
     if (ev.stopPropagation) ev.stopPropagation();

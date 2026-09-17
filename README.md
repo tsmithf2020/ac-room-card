@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.35.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.35.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -74,9 +74,9 @@ and fill in whatever sensors you have. Everything except `entity` is optional an
 hides itself when absent.
 
 The editor keeps the unit, the top view and the title in sight, and folds the
-rest into sections: **Room sensors**, **Windows and warnings**, **Power cut**,
-**Fans**, **IR unit (no climate)** and **Shutdown timer**. A section that already
-has something set opens by itself.
+rest into sections: **Sensors**, **Windows**, **Plug**, **Fans**, **IR unit** and
+**Timer**. A section that already has something set opens by itself, and
+**IR unit** starts with a short explanation of how modes and scenes work.
 
 Minimal:
 
@@ -469,8 +469,8 @@ most recent, the unit shows as off.
   **Off** button is hidden: there is nothing to fire.
 - Mixed lists work. A boolean that is on always wins.
 
-In the visual editor these are the **Cool mode**, **Heat mode** and **Turn off**
-fields.
+In the visual editor these are the **Cool**, **Heat** and **Turn off** fields, in
+the **IR unit** section.
 
 The rooms list uses the same thing: its power button fires the first mode to
 turn on, and `off_entity` to turn off.
@@ -517,7 +517,7 @@ off_entity: scene.living_ac_off
 - **Tapping the mode** goes back to the step you last used in it (the lowest one
   if it was never used).
 
-In the visual editor, pick several scenes in **Cool mode** or **Heat mode**: a
+In the visual editor, pick several scenes in **Cool** or **Heat**: a
 temperature field appears for each one, empty meaning "take it from the name".
 
 On the rooms list, the **Target** column shows the temperature of the running

@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.35.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.35.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -77,9 +77,10 @@ de clima y completa los sensores que tengas. Todo es opcional salvo `entity`, y
 lo que no pones se oculta solo.
 
 El editor deja a la vista el equipo, la vista de arriba y el nombre, y pliega lo
-demás en secciones: **Sensores de la pieza**, **Ventanas y avisos**, **Corte de
-corriente**, **Ventiladores**, **Aire por IR (sin climate)** y **Temporizador de
-apagado**. Una sección que ya tiene algo configurado se abre sola.
+demás en secciones: **Sensores**, **Ventanas**, **Enchufe**, **Ventiladores**,
+**Aire IR** y **Temporizador**. Una sección que ya tiene algo configurado se abre
+sola, y **Aire IR** parte con una explicación corta de cómo funcionan los modos y
+las escenas.
 
 Mínima:
 
@@ -476,7 +477,8 @@ ve apagado.
   botón **Apagado** se oculta: no hay nada que disparar.
 - Se pueden mezclar. Un boolean prendido siempre gana.
 
-En el editor visual son los campos **Modo frío**, **Modo calor** y **Apagar**.
+En el editor visual son los campos **Frío**, **Calor** y **Apagar**, en la sección
+**Aire IR**.
 
 La lista de piezas usa lo mismo: su botón de encendido dispara el primer modo
 para prender y `off_entity` para apagar.
@@ -525,7 +527,7 @@ off_entity: scene.living_ac_off
 - **Al tocar el modo** vuelve al paso que usaste la última vez en él (el más
   bajo, si nunca se usó).
 
-En el editor visual, elige varias escenas en **Modo frío** o **Modo calor**:
+En el editor visual, elige varias escenas en **Frío** o **Calor**:
 aparece un campo de temperatura para cada una; vacío quiere decir "sácala del
 nombre".
 

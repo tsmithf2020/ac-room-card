@@ -165,6 +165,13 @@ const hass = {
   ok("los nombres de ventiladores van dentro de su seccion", JSON.stringify(sec(esqS, "mdi:fan").schema).includes("fan_name_1"), "");
   ok("las temperaturas de escena, dentro de Aire por IR", JSON.stringify(sec(esqS, "mdi:remote").schema).includes("mode_cold_temp_1"), "");
   ok("titulos en ingles con HA en ingles", sec(ED.buildSchema(completo, "en"), "mdi:fan").title === "Fans", "");
+  ok("titulos cortos", secS.map((s) => s.title).join("|") === "Sensores|Ventanas|Enchufe|Ventiladores|Aire IR|Temporizador",
+     secS.map((s) => s.title));
+  ok("Aire IR trae su explicacion", /flechas/.test(sec(esqS, "mdi:remote").help || ""), sec(esqS, "mdi:remote").help);
+  ok("y en ingles con HA en ingles", /arrows/.test(sec(ED.buildSchema(completo, "en"), "mdi:remote").help || ""), "");
+  ok("las otras secciones no llevan texto", secS.filter((s) => s.help).length === 1, secS.map((s) => !!s.help));
+  const dec = JSON.stringify(sec(esqS, "mdi:thermometer").schema);
+  ok("decimales como deslizador, para tener el titulo arriba", /"decimals","selector":\{"number":\{[^}]*"mode":"slider"/.test(dec), dec);
   const abiertas = new Set();
   ED.buildSchema({ entity: "climate.dorm", timer: { entity: "timer.t" } }, "es", abiertas);
   const trasVaciar = ED.buildSchema({ entity: "climate.dorm" }, "es", abiertas);
