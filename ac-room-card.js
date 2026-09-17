@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.38.0";
+const VERSION = "0.38.1";
 
 const T = {
   pwOn: "con corriente",
@@ -2168,6 +2168,11 @@ async function crearTemporizador(hass, cfg, lang = "es") {
     alias: tr(lang, `Apagar ${nombre} al terminar el temporizador`, `Turn off ${nombre} when its timer ends`),
     description: tr(lang, "Creada por AC Room Card.", "Created by AC Room Card."),
     mode: "single",
+    // Al vencer, climate.turn_off vuelve a disparar esta misma automatizacion
+    // por el cambio a off mientras la primera corrida sigue. Esa segunda no
+    // haria nada (pide el timer activo), pero con "single" dejaba un
+    // "Already running" en el log cada vez. Probado contra HA real.
+    max_exceeded: "silent",
     triggers,
     conditions: [],
     actions: [{ choose: opciones }],

@@ -83,6 +83,8 @@ function hassFalso(admin = true) {
   const auto = h.api[0].body;
   ok("con su id y un nombre claro", auto.id === "ac_room_card_temporizador_dormitorio" &&
      auto.alias === "Apagar Dormitorio al terminar el temporizador", auto);
+  ok("single y en silencio: apagar el aire la vuelve a disparar y no debe ensuciar el log",
+     auto.mode === "single" && auto.max_exceeded === "silent", [auto.mode, auto.max_exceeded]);
   ok("se dispara al terminar el timer", auto.triggers[0].trigger === "event" && auto.triggers[0].event_type === "timer.finished" &&
      auto.triggers[0].event_data.entity_id === "timer.temporizador_dormitorio", auto.triggers[0]);
   ok("y al terminar apaga el climate", auto.actions[0].choose[0].sequence[0].action === "climate.turn_off", auto.actions[0].choose[0]);
