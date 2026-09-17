@@ -27,9 +27,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      # Cinco suites: cada una lleva su propia cadena de promesas.
+      # Seis suites: cada una lleva su propia cadena de promesas.
       - run: node test/smoke.js
       - run: node test/discover.js
       - run: node test/base_view.js
       - run: node test/modes_i18n.js
       - run: node test/steps.js
+      - run: node test/vendor.js
+      # El mini-climate incluido tiene que ser byte a byte el de su release.
+      - run: node scripts/vendor-mini-climate.mjs --check
+      # Solo avisa: actualizar la copia es una decision, no un fallo.
+      - name: ¿Hay un mini-climate más nuevo?
+        run: |
+          incluido=$(grep -oP 'const MINI_CLIMATE_BUNDLED = "\K[^"]+' ac-room-card.js)
+          ultimo=$(curl -fsS https://api.github.com/repos/artem-sedykh/mini-climate-card/releases/latest | jq -r .tag_name)
+          if [ -n "$ultimo" ] && [ "$incluido" != "$ultimo" ]; then
+            echo "::warning::mini-climate-card $ultimo publicado; el incluido es $incluido. Actualiza con: node scripts/vendor-mini-climate.mjs"
+          fi

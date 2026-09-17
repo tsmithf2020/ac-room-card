@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.35.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.36.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -549,10 +549,15 @@ ventilador del aire en la misma línea. Es la vista de la captura de arriba, sin
 escribir a mano los bloques `base_card` y `base_card_style`.
 
 En el editor visual es el desplegable *Vista de arriba*, y una tarjeta agregada
-desde la interfaz parte en `compact` si mini-climate está instalado. Necesita
-mini-climate de HACS; sin él, la tarjeta vuelve al termostato integrado en vez de
-mostrar un error. `decimals` fija la precisión de las temperaturas, un decimal
-por defecto.
+desde la interfaz parte en `compact`. **No hay que instalar nada más:**
+mini-climate viene incluido dentro de `ac-room-card.js` (ver
+[Agradecimientos](#agradecimientos)). `decimals` fija la precisión de las
+temperaturas, un decimal por defecto.
+
+Si ya instalaste mini-climate por HACS, las dos copias conviven: la que carga
+primero registra la tarjeta y la otra se hace a un lado. Si solo lo tenías para
+esta tarjeta, puedes desinstalarlo; si no, el selector de tarjetas muestra
+*Mini Climate* dos veces.
 
 Un `base_card` escrito a mano siempre gana, y un `base_card_style` propio
 reemplaza los rótulos que trae. En la tarjeta de piezas, `base_view` vale para el
@@ -827,6 +832,7 @@ node test/discover.js     # descubrimiento y editor de piezas
 node test/base_view.js    # la vista de arriba elegida desde el editor
 node test/modes_i18n.js   # modos con escenas y botones, botones de modo e idioma
 node test/steps.js        # varias escenas por modo y las flechas de temperatura
+node test/vendor.js       # el bloque de mini-climate incluido
 ```
 
 Sin navegador: un shim mínimo de DOM prueba el formato de los valores, que los
@@ -837,6 +843,31 @@ editor visual.
 
 No hay compilación. Edita `ac-room-card.js`, corre los tests y haz commit.
 
+El mini-climate incluido va entre dos marcas al final del archivo y nunca se
+edita a mano:
+
+```bash
+node scripts/vendor-mini-climate.mjs           # trae el último release
+node scripts/vendor-mini-climate.mjs v3.5.0    # o uno en particular
+node scripts/vendor-mini-climate.mjs --check   # CI: ¿idéntico a su release?
+```
+
+La verificación corre en cada push, y avisa cuando mini-climate publica un release
+más nuevo que el incluido.
+
+## Agradecimientos
+
+La vista compacta es **[mini-climate-card](https://github.com/artem-sedykh/mini-climate-card)**,
+de **[Artem Sedykh](https://github.com/artem-sedykh)**. Gracias, Artem, por una
+tarjeta que hace el trabajo pesado arriba de estas piezas, y por mantenerla viva
+a través de cada rediseño de Home Assistant.
+
+Una copia sin modificar de su bundle publicado viene dentro de `ac-room-card.js`,
+para que la vista compacta funcione sin instalar nada más. Se usa bajo su licencia
+MIT, cuyo texto completo queda justo arriba de esa copia. Si te gusta, dale una
+estrella al original: también es una muy buena tarjeta por sí sola.
+
 ## Licencia
 
-MIT. Ver [LICENSE](LICENSE).
+MIT. Ver [LICENSE](LICENSE). El mini-climate-card incluido también es MIT, © 2020
+Artem Sedykh.
