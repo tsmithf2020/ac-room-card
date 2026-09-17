@@ -150,14 +150,14 @@ const hass = {
   const esperados = ["entity", "base_view", "mode_buttons", "name", "icon", "power_entity", "temp_entity",
     "lux_entity", "decimals", "energy_today_entity", "energy_month_entity", "window_entity", "battery_warn",
     "show_warning", "power_switch", "power_switch_confirm", "fans", "fan_name_0", "fan_name_1", "fans_position",
-    "fan_mode", "mode_cold_entity", "mode_heat_entity", "mode_cold_temp_0", "mode_cold_temp_1",
+    "fan_mode", "automations", "mode_cold_entity", "mode_heat_entity", "mode_cold_temp_0", "mode_cold_temp_1",
     "mode_off_entity", "timer_entity", "timer_minutes_entity", "timer_button_entity"];
   ok("no se pierde ningun campo", esperados.every((n) => todos.includes(n)), esperados.filter((n) => !todos.includes(n)));
   ok("y ninguno se repite", new Set(todos).size === todos.length, todos);
   ok("arriba, a la vista: equipo, vista y nombre",
      esqS[0].name === "entity" && JSON.stringify(esqS[1]).includes('"base_view"') && JSON.stringify(esqS[2]).includes('"name"'), esqS.slice(0, 3));
   const secS = esqS.filter((s) => s.type === "expandable");
-  ok("seis secciones plegables", secS.length === 6, secS.map((s) => s.title));
+  ok("siete secciones plegables", secS.length === 7, secS.map((s) => s.title));
   ok("todas aplanadas (los datos no se anidan)", secS.every((s) => s.flatten === true && s.name === ""), secS);
   const sec = (esq, icono) => esq.find((s) => s.icon === icono);
   ok("con algo configurado, la seccion viene abierta", sec(esqS, "mdi:fan").expanded === true && sec(esqS, "mdi:remote").expanded === true, "");
@@ -165,11 +165,11 @@ const hass = {
   ok("los nombres de ventiladores van dentro de su seccion", JSON.stringify(sec(esqS, "mdi:fan").schema).includes("fan_name_1"), "");
   ok("las temperaturas de escena, dentro de Aire por IR", JSON.stringify(sec(esqS, "mdi:remote").schema).includes("mode_cold_temp_1"), "");
   ok("titulos en ingles con HA en ingles", sec(ED.buildSchema(completo, "en"), "mdi:fan").title === "Fans", "");
-  ok("titulos cortos", secS.map((s) => s.title).join("|") === "Sensores|Ventanas|Enchufe|Ventiladores|Aire IR|Temporizador",
+  ok("titulos cortos", secS.map((s) => s.title).join("|") === "Sensores|Ventanas|Enchufe|Ventiladores|Automatizaciones|Aire IR|Temporizador",
      secS.map((s) => s.title));
   ok("Aire IR trae su explicacion", /flechas/.test(sec(esqS, "mdi:remote").help || ""), sec(esqS, "mdi:remote").help);
   ok("y en ingles con HA en ingles", /arrows/.test(sec(ED.buildSchema(completo, "en"), "mdi:remote").help || ""), "");
-  ok("las otras secciones no llevan texto", secS.filter((s) => s.help).length === 1, secS.map((s) => !!s.help));
+  ok("solo Aire IR y Automatizaciones llevan texto", secS.filter((s) => s.help).length === 2, secS.map((s) => !!s.help));
   const dec = JSON.stringify(sec(esqS, "mdi:thermometer").schema);
   ok("decimales como deslizador, para tener el titulo arriba", /"decimals","selector":\{"number":\{[^}]*"mode":"slider"/.test(dec), dec);
   const abiertas = new Set();

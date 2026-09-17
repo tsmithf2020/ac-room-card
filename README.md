@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.36.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.37.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -133,6 +133,7 @@ timer:
 | `battery_warn` | number | no | Low-battery threshold in %, default `20`. |
 | `fans` | list | no | Room fans — see [Fans](#fans). |
 | `fans_position` | string | no | `inline` (default), `auto` or `row`. |
+| `automations` | list | no | Automations that run the unit, or the boolean that enables them — see [Automations](#automations). |
 | `fan_mode` | bool | no | Show the **unit's own** fan speed (`fan_modes` of the climate entity). |
 | `fan_mode_names` | map | no | Rename those speeds, e.g. `auto: Automatic`. |
 | `energy_today_entity` | string | no | Energy used today. |
@@ -258,6 +259,39 @@ Accepts `fan`, `switch` and `light` entities — some fans end up exposed in the
 
 > These are the **room's** fans. For the air conditioner's own fan speed, see
 > `fan_mode` below.
+
+---
+
+## Automations
+
+```yaml
+automations:
+  - entity: input_boolean.bedroom_summer_control   # the switch that enables it
+    name: Summer control
+    icon: mdi:white-balance-sunny
+    color: var(--warning-color)
+  - automation.bedroom_ac_night                    # or the automation itself
+```
+
+What runs the unit on its own. Not a fan, so it does not spin and is never blue:
+
+| State | Look |
+|---|---|
+| Enabled | green, or its own `color` |
+| Running right now | pulsing |
+| Disabled | grey |
+| Unavailable | faded |
+
+Tap to enable or disable it. The tooltip says when it last ran (automations and
+scripts) or since when it has been on or off (booleans). They sit at the start of
+the data line; `position: end` moves one to the end. Accepts `automation`,
+`input_boolean` and `script`.
+
+In the visual editor they have their own **Automations** section. If you used to
+put a boolean like this under `fans`, it is already drawn as an automation, and
+the editor moves it to `automations` — name, icon, colour and position included —
+the next time you save. On the rooms list they share the fans column, before the
+fans.
 
 ---
 
@@ -680,7 +714,7 @@ without the code editor — see [Editing rooms from the UI](#editing-rooms-from-
 Or list them yourself. Each room takes **the same block as `ac-room-card`**, so
 you can copy a card's config straight in. Fields it uses: `entity`, `name`,
 `power_entity`, `temp_entity`, `lux_entity`, `window_entity` (with battery),
-`fans`, `power_switch` (see [Cutting power from the list](#cutting-power-from-the-list)),
+`fans`, `automations`, `power_switch` (see [Cutting power from the list](#cutting-power-from-the-list)),
 `modes`, `off_entity`, `timer`, `battery_warn`, `decimals`.
 
 `decimals` also goes on the rooms card itself, for every row at once. Without
@@ -812,6 +846,7 @@ node test/base_view.js    # the top view picked from the editor
 node test/modes_i18n.js   # scene/button modes, mode buttons and language
 node test/steps.js        # several scenes per mode and the temperature arrows
 node test/vendor.js       # the bundled mini-climate block
+node test/automations.js  # automations: state, tooltip, editor section, moving them out of fans
 ```
 
 No browser: a minimal DOM shim exercises value formatting,

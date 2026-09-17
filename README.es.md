@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.36.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.37.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -137,6 +137,7 @@ timer:
 | `battery_warn` | number | no | Umbral de pila baja en %, por defecto `20`. |
 | `fans` | lista | no | Ventiladores de la pieza: ver [Ventiladores](#ventiladores). |
 | `fans_position` | string | no | `inline` (por defecto), `auto` o `row`. |
+| `automations` | lista | no | Automatizaciones que manejan el aire, o el boolean que las habilita: ver [Automatizaciones](#automatizaciones). |
 | `fan_mode` | bool | no | Muestra la velocidad del ventilador **del propio aire** (`fan_modes` de la entidad `climate`). |
 | `fan_mode_names` | map | no | Renombra esas velocidades, por ejemplo `auto: Automático`. |
 | `energy_today_entity` | string | no | Energía usada hoy. |
@@ -264,6 +265,40 @@ quedan expuestos en el dominio `light`), porque el cambio usa
 
 > Estos son los ventiladores **de la pieza**. Para la velocidad del ventilador
 > del propio aire, ve `fan_mode` más abajo.
+
+---
+
+## Automatizaciones
+
+```yaml
+automations:
+  - entity: input_boolean.control_verano_dorm   # el interruptor que la habilita
+    name: Control Verano
+    icon: mdi:white-balance-sunny
+    color: var(--warning-color)
+  - automation.aire_dorm_noche                  # o la automatización misma
+```
+
+Lo que maneja el aire por su cuenta. No es un ventilador, así que no gira ni se
+pone azul:
+
+| Estado | Cómo se ve |
+|---|---|
+| Activa | verde, o su `color` propio |
+| Corriendo ahora | latiendo |
+| Desactivada | gris |
+| No disponible | desvanecida |
+
+Tócala para activarla o desactivarla. El tooltip dice cuándo corrió por última
+vez (automatizaciones y scripts) o desde cuándo está como está (booleans). Van al
+principio de la línea de datos; `position: end` deja una al final. Acepta
+`automation`, `input_boolean` y `script`.
+
+En el editor visual tienen su propia sección **Automatizaciones**. Si antes
+metías un boolean así en `fans`, ya se dibuja como automatización, y el editor lo
+pasa a `automations` (con su nombre, ícono, color y posición) la próxima vez que
+guardes. En la lista de piezas comparten la columna de los ventiladores, antes
+que ellos.
 
 ---
 
@@ -696,7 +731,7 @@ pieza sin el editor de código. Ver
 
 O lístalas tú. Cada pieza lleva **el mismo bloque que `ac-room-card`**, así que
 puedes copiar directo la config de una tarjeta. Campos que usa: `entity`, `name`,
-`power_entity`, `temp_entity`, `lux_entity`, `window_entity` (con pila), `fans`,
+`power_entity`, `temp_entity`, `lux_entity`, `window_entity` (con pila), `fans`, `automations`,
 `power_switch` (ver [Cortar la corriente desde la lista](#cortar-la-corriente-desde-la-lista)),
 `modes`, `off_entity`, `timer`, `battery_warn`, `decimals`.
 
@@ -833,6 +868,7 @@ node test/base_view.js    # la vista de arriba elegida desde el editor
 node test/modes_i18n.js   # modos con escenas y botones, botones de modo e idioma
 node test/steps.js        # varias escenas por modo y las flechas de temperatura
 node test/vendor.js       # el bloque de mini-climate incluido
+node test/automations.js  # automatizaciones: estado, tooltip, sección del editor y mudanza desde fans
 ```
 
 Sin navegador: un shim mínimo de DOM prueba el formato de los valores, que los

@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.36.0";
+const VERSION = "0.37.0";
 
 const T = {
   pwOn: "con corriente",
@@ -33,6 +33,12 @@ const T = {
   windows: "Ventanas",
   batLow: "pila baja",
   unavailable: "no disponible",
+  autoOn: "activa",
+  autoOff: "desactivada",
+  autoRunning: "corriendo ahora",
+  autoLast: "última vez",
+  autoNever: "nunca",
+  autoSince: "desde",
 };
 
 const T_EN = {
@@ -59,6 +65,12 @@ const T_EN = {
   windows: "Windows",
   batLow: "low battery",
   unavailable: "unavailable",
+  autoOn: "enabled",
+  autoOff: "disabled",
+  autoRunning: "running now",
+  autoLast: "last run",
+  autoNever: "never",
+  autoSince: "since",
 };
 
 /* ---------- idioma ---------- */
@@ -303,6 +315,47 @@ function stepModeFor(hass, modes, offEntity, dir) {
 /* Sin boolean que apagar ni off_entity, el boton Apagado no haria nada. */
 const canTurnOff = (modes, offEntity) =>
   !!offEntity || (modes || []).some(modeIsStateful);
+
+/* ---------- automatizaciones ---------- */
+
+/* Lo que maneja el aire por su cuenta: la automatizacion misma, o el
+   boolean o script que la habilita ("Control Verano"). No son ventiladores:
+   no giran, y apagadas van en gris, no en azul. */
+const AUTO_DOMAINS = ["automation", "input_boolean", "script"];
+
+/* "hace 5 min" / "5 min ago". */
+function hace(iso, lang) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  const [n, u] = s < 60 ? [s, "s"]
+    : s < 3600 ? [Math.round(s / 60), "min"]
+    : s < 86400 ? [Math.round(s / 3600), "h"]
+    : [Math.round(s / 86400), "d"];
+  return lang === "en" ? `${n} ${u} ago` : `hace ${n} ${u}`;
+}
+
+/* Clase para pintar y texto para el tooltip. Una automatizacion dice si esta
+   activa y cuando corrio por ultima vez; un script, si esta corriendo; un
+   boolean, desde cuando esta como esta. */
+function autoState(hass, a, L, lang) {
+  const st = hass.states[a.entity];
+  const nombre = a.name || (st && st.attributes.friendly_name) || a.entity;
+  if (!st || st.state === "unavailable" || st.state === "unknown") {
+    return { clase: "na", on: false, texto: `${nombre}: ${L.unavailable}` };
+  }
+  const d = domainOf(a.entity);
+  const on = st.state === "on";
+  const corriendo = (d === "automation" && Number(st.attributes.current) > 0) || (d === "script" && on);
+  const partes = [corriendo ? L.autoRunning : on ? L.autoOn : L.autoOff];
+  if (d === "automation" || d === "script") {
+    partes.push(`${L.autoLast}: ${hace(st.attributes.last_triggered, lang) || L.autoNever}`);
+  } else if (st.last_changed) {
+    const cuando = hace(st.last_changed, lang);
+    if (cuando) partes.push(`${L.autoSince} ${cuando}`);
+  }
+  return { clase: corriendo ? "run" : on ? "on" : "off", on: on || corriendo, texto: `${nombre}: ${partes.join(" · ")}` };
+}
 
 function moreInfo(el, entityId) {
   if (!entityId) return;
@@ -614,6 +667,19 @@ class AcRoomCard extends HTMLElement {
 
     if (this._fanModeSupported()) this._buildFanMode();
 
+    // Automatizaciones: siempre en la linea de datos, por defecto al
+    // principio (antes de la potencia); `position: end` las deja al final.
+    const autos = this._autoList();
+    if (autos.length) {
+      const fin = this._rows.power.querySelector(".fanslot");
+      const ini = this._rows.power.querySelector(".preslot");
+      this._autoBtns = autos.map((a) => {
+        const b = this._makeAutoBtn(a);
+        (a.position === "end" || !ini ? fin : ini).appendChild(b);
+        return b;
+      });
+    }
+
     /* Por defecto todos van en la linea de datos: caben de sobra y se lee
        mejor que con una fila aparte. `auto` deja el comportamiento viejo (uno
        en la linea, dos o mas en fila propia) y `row` fuerza la fila. */
@@ -852,7 +918,11 @@ class AcRoomCard extends HTMLElement {
     }
 
     const p = this._fmt(cfg.power_entity);
-    if (!p && !cfg.window_entity && !cfg.temp_entity && !cfg.lux_entity) {
+    // La linea tambien se muestra si solo lleva automatizaciones o
+    // ventiladores: antes una pieza con puros conmutables quedaba sin nada.
+    const conBotones = (this._autoBtns && this._autoBtns.length) ||
+      (this._fansInline && this._fanBtns && this._fanBtns.length);
+    if (!p && !cfg.window_entity && !cfg.temp_entity && !cfg.lux_entity && !conBotones) {
       this._rows.power.style.display = "none";
     } else {
       this._rows.power.style.display = "";
@@ -904,6 +974,7 @@ class AcRoomCard extends HTMLElement {
     this._bindMoreInfo(this._rows.power.querySelector(".lux"), () => cfg.lux_entity);
 
     this._updateFanMode();
+    this._updateAutos();
     this._updateFans();
     this._updatePowerSwitch();
     this._updateModes();
@@ -950,8 +1021,10 @@ class AcRoomCard extends HTMLElement {
 
   /* ---------- ventiladores ---------- */
 
+  // Un boolean o una automatizacion en `fans` (configs de antes) se dibuja
+  // como automatizacion, sin tener que volver a guardar la tarjeta.
   _fanList() {
-    return normEntries(this._config.fans);
+    return splitFans(this._config).fans;
   }
 
   _fanIsOn(entityId) {
@@ -976,6 +1049,38 @@ class AcRoomCard extends HTMLElement {
     b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>`;
     b.addEventListener("click", () => this._toggleFan(f.entity));
     return b;
+  }
+
+  /* ---------- automatizaciones ---------- */
+
+  _autoList() {
+    return splitFans(this._config).autos;
+  }
+
+  _makeAutoBtn(a) {
+    const b = document.createElement("button");
+    b.className = "auto";
+    b.dataset.entity = a.entity;
+    if (a.color) b.dataset.color = a.color;
+    b.innerHTML = `<ha-icon icon="${a.icon || "mdi:robot-outline"}"></ha-icon>`;
+    // Tocar la activa o la desactiva (homeassistant.toggle sirve para
+    // automation, input_boolean y script).
+    b.addEventListener("click", (ev) => {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      this._hass.callService("homeassistant", "toggle", { entity_id: a.entity });
+    });
+    return b;
+  }
+
+  _updateAutos() {
+    if (!this._autoBtns) return;
+    const autos = this._autoList();
+    this._autoBtns.forEach((b, i) => {
+      const e = autoState(this._hass, autos[i] || { entity: b.dataset.entity }, this._config.labels, this._lang);
+      b.className = `auto ${e.clase}`;
+      b.style.color = e.on && b.dataset.color ? b.dataset.color : "";
+      b.title = e.texto;
+    });
   }
 
   _updateFans() {
@@ -1349,6 +1454,20 @@ class AcRoomCard extends HTMLElement {
       .fan.off { color: var(--info-color, #039be5); }
       .fan:hover { opacity: .7; }
       @keyframes acrc-spin { to { transform: rotate(360deg); } }
+      /* Automatizaciones: verde (o su color) activas, gris desactivadas, y
+         latiendo mientras corren. No giran: no son ventiladores. */
+      .auto {
+        display: inline-flex; align-items: center;
+        font: inherit; cursor: pointer;
+        border: none; background: transparent; padding: 0;
+      }
+      .auto ha-icon { --mdc-icon-size: 20px; color: inherit; }
+      .auto.on, .auto.run { color: var(--success-color, #43a047); }
+      .auto.run ha-icon { animation: acrc-pulse 1.2s ease-in-out infinite; }
+      .auto.off { color: var(--disabled-text-color, #9e9e9e); }
+      .auto.na { color: var(--disabled-text-color, #9e9e9e); opacity: .5; }
+      .auto:hover { opacity: .7; }
+      @keyframes acrc-pulse { 50% { opacity: .35; } }
       .fanrow {
         display: flex; flex-wrap: wrap; gap: 14px;
         padding: 7px 16px 10px 16px;
@@ -1447,6 +1566,7 @@ const EDITOR_LABELS = {
     fans_position: "Posición",
     fan_mode: "Velocidad del equipo",
     fan_name: "Nombre de",
+    automations: "Automatizaciones",
     mode_cold_entity: "Frío",
     mode_heat_entity: "Calor",
     mode_off_entity: "Apagar",
@@ -1477,6 +1597,7 @@ const EDITOR_LABELS = {
     fans_position: "Position",
     fan_mode: "Unit's fan speed",
     fan_name: "Name of",
+    automations: "Automations",
     mode_cold_entity: "Cool",
     mode_heat_entity: "Heat",
     mode_off_entity: "Turn off",
@@ -1514,6 +1635,38 @@ function normFans(list) {
 
 const fanIds = (list) => normFans(list).map((f) => f.entity);
 
+/* Ventiladores de verdad y automatizaciones. Las que estaban en `fans` (un
+   boolean tipo "Control Verano") se cuentan como automatizaciones, detras
+   de las de `automations`. */
+function splitFans(c) {
+  const enFans = normFans(c && c.fans);
+  const esAuto = (f) => AUTO_DOMAINS.includes(domainOf(f.entity));
+  return {
+    fans: enFans.filter((f) => !esAuto(f)),
+    autos: [...normFans(c && c.automations), ...enFans.filter(esAuto)],
+  };
+}
+
+/* Una lista con nombre editable por posicion (`<prefijo>_<i>`). Si la lista
+   acaba de cambiar, esos indices ya no calzan: los nombres se buscan por
+   entidad y el siguiente render vuelve a poblar el formulario. Conserva lo
+   que el formulario no maneja (icono, color, posicion). */
+function listFromForm(ids, prevList, d, prefijo) {
+  const listaCambio = prevList.length !== ids.length || prevList.some((f, i) => f.entity !== ids[i]);
+  return ids.map((id, i) => {
+    const old = prevList.find((f) => f.entity === id) || {};
+    const campo = `${prefijo}_${i}`;
+    const nombre = listaCambio
+      ? old.name
+      : String(d[campo] === undefined ? old.name || "" : d[campo]).trim();
+    const { entity, name, ...resto } = old;
+    const obj = { entity: id, ...resto };
+    if (nombre) obj.name = nombre;
+    // Sin nada propio, se guarda como simple entity_id
+    return Object.keys(obj).length > 1 ? obj : id;
+  });
+}
+
 /* Secciones plegables del editor: que campos van en cada una, su titulo y
    su icono. Lo basico (equipo, vista, nombre) queda siempre a la vista. */
 const EDITOR_SECTIONS = [
@@ -1529,6 +1682,18 @@ const EDITOR_SECTIONS = [
   { id: "fans", icon: "mdi:fan",
     title: ["Ventiladores", "Fans"],
     keys: ["fans", "fans_position", "fan_mode"] },
+  { id: "autos", icon: "mdi:robot-outline",
+    title: ["Automatizaciones", "Automations"],
+    help: [
+      "Lo que maneja este aire por su cuenta: la automatización misma, o el interruptor (input_boolean) " +
+      "que la habilita, como un «Control Verano». Van en la línea de datos: con color si están activas, " +
+      "en gris si no, y latiendo mientras corren. Tócalas para activarlas o desactivarlas; pasa el cursor " +
+      "para ver cuándo corrieron por última vez.",
+      "What runs this unit on its own: the automation itself, or the switch (input_boolean) that enables " +
+      "it, like a \"Summer control\". They sit on the data line: coloured when enabled, grey when not, and " +
+      "pulsing while they run. Tap to enable or disable; hover to see when they last ran.",
+    ],
+    keys: ["automations"] },
   { id: "ir", icon: "mdi:remote",
     title: ["Aire IR", "IR unit"],
     help: [
@@ -1582,7 +1747,9 @@ function buildSchema(config, lang = "es", abiertas = null) {
       : [];
   };
   const temps = [...tempsDe(0, "mode_cold"), ...tempsDe(1, "mode_heat")];
-  const fans = fanIds(c.fans);
+  const { fans, autos } = splitFans(c);
+  const nombres = (lista, prefijo) => (lista.length ? [{ name: "", type: "grid",
+    schema: lista.map((_, i) => ({ name: `${prefijo}_${i}`, selector: { text: {} } })) }] : []);
 
   const contenido = {
     sensors: [
@@ -1599,9 +1766,12 @@ function buildSchema(config, lang = "es", abiertas = null) {
     ],
     fans: [
       campos.fans,
-      ...(fans.length ? [{ name: "", type: "grid",
-        schema: fans.map((_, i) => ({ name: `fan_name_${i}`, selector: { text: {} } })) }] : []),
+      ...nombres(fans, "fan_name"),
       { name: "", type: "grid", schema: [campos.fans_position, campos.fan_mode] },
+    ],
+    autos: [
+      campos.automations,
+      ...nombres(autos, "auto_name"),
     ],
     ir: [
       { name: "", type: "grid", schema: [campos.mode_cold_entity, campos.mode_heat_entity] },
@@ -1656,6 +1826,7 @@ const baseFields = (lang) => ({
   mode_off_entity: { name: "mode_off_entity", selector: { entity: { domain: ["scene", "script", "button", "input_button"] } } },
   window_entity: { name: "window_entity", selector: { entity: { domain: "binary_sensor", multiple: true } } },
   fans: { name: "fans", selector: { entity: { domain: ["fan", "switch", "light"], multiple: true } } },
+  automations: { name: "automations", selector: { entity: { domain: AUTO_DOMAINS, multiple: true } } },
   fans_position: { name: "fans_position", selector: { select: { mode: "dropdown", options: [
     { value: "inline", label: tr(lang, "En la línea de datos (por defecto)", "On the data line (default)") },
     { value: "auto", label: tr(lang, "Uno en la línea, varios en fila propia", "One on the line, several on their own row") },
@@ -1694,13 +1865,17 @@ function toForm(config) {
   }
   const wins = normFans(c.window_entity);
   if (wins.length) out.window_entity = wins.map((x) => x.entity);
-  const fans = normFans(c.fans);
+  const { fans, autos } = splitFans(c);
   if (fans.length) {
     out.fans = fans.map((f) => f.entity);
     fans.forEach((f, i) => {
       out[`fan_name_${i}`] = f.name || "";
     });
   }
+  out.automations = autos.map((a) => a.entity);
+  autos.forEach((a, i) => {
+    out[`auto_name_${i}`] = a.name || "";
+  });
   // Cada modo va al form como lista: una escena, o varias (una por
   // temperatura) con su campo de temperatura cada una.
   const m = normModes(c.modes);
@@ -1813,31 +1988,25 @@ function fromForm(prev, data, lang = "es") {
     delete out.window_entity;
   }
 
-  // Ventiladores. Los nombres vienen en campos fan_name_<i>, que son por
-  // posicion; si la lista misma acaba de cambiar esos indices ya no calzan,
-  // asi que en ese caso se conservan los nombres buscando por entidad y el
-  // siguiente render vuelve a poblar el formulario correctamente.
-  const prevFans = normFans((prev || {}).fans);
+  // Ventiladores y automatizaciones. El form completo (el que trae
+  // `automations`) las separa; un boolean, script o automatizacion que venia
+  // en `fans`, como se armaba antes, pasa a `automations` con su nombre, icono,
+  // color y posicion. Una llamada parcial sin `automations` no mueve nada.
+  const completo = d.automations !== undefined;
+  const previo = splitFans(prev || {});
+  const prevFans = completo ? previo.fans : normFans((prev || {}).fans);
   if (Array.isArray(d.fans) && d.fans.length) {
-    const listaCambio =
-      prevFans.length !== d.fans.length ||
-      prevFans.some((f, i) => f.entity !== d.fans[i]);
-    out.fans = d.fans.map((id, i) => {
-      const old = prevFans.find((f) => f.entity === id) || {};
-      const nombre = listaCambio
-        ? old.name
-        : String(d[`fan_name_${i}`] === undefined ? old.name || "" : d[`fan_name_${i}`]).trim();
-      const obj = { entity: id };
-      if (nombre) obj.name = nombre;
-      if (old.icon) obj.icon = old.icon;
-      // Sin nombre ni icono propios, se guarda como simple entity_id
-      return obj.name || obj.icon ? obj : id;
-    });
+    out.fans = listFromForm(d.fans, prevFans, d, "fan_name");
   } else {
     delete out.fans;
   }
-  // Los fan_name_* son del formulario, nunca de la config del card
-  for (const k of Object.keys(out)) if (/^fan_name_\d+$/.test(k)) delete out[k];
+  if (completo) {
+    const ids = (Array.isArray(d.automations) ? d.automations : []).filter(Boolean);
+    if (ids.length) out.automations = listFromForm(ids, previo.autos, d, "auto_name");
+    else delete out.automations;
+  }
+  // Los *_name_* son del formulario, nunca de la config del card
+  for (const k of Object.keys(out)) if (/^(fan|auto)_name_\d+$/.test(k)) delete out[k];
 
   // Reconstruye `modes` conservando nombre e icono si ya existian
   const prevModes = normModes((prev || {}).modes);
@@ -1891,9 +2060,11 @@ function createRoomForm(getConfig, getHass, onChange) {
   form.computeLabel = (schema) => {
     const hass = getHass();
     const L = EDITOR_LABELS[langOf(hass)];
-    const m = /^fan_name_(\d+)$/.exec(schema.name || "");
+    const m = /^(fan|auto)_name_(\d+)$/.exec(schema.name || "");
     if (m) {
-      const id = fanIds(getConfig().fans)[Number(m[1])];
+      const partes = splitFans(getConfig());
+      const item = (m[1] === "fan" ? partes.fans : partes.autos)[Number(m[2])];
+      const id = item && item.entity;
       const st = id && hass && hass.states[id];
       return `${L.fan_name} ${(st && st.attributes.friendly_name) || id || ""}`;
     }
@@ -1989,6 +2160,12 @@ const RT = {
   cancel: "Cancelar",
   min: "min",
   empty: "Configura al menos una pieza en `rooms`",
+  autoOn: "activa",
+  autoOff: "desactivada",
+  autoRunning: "corriendo ahora",
+  autoLast: "última vez",
+  autoNever: "nunca",
+  autoSince: "desde",
 };
 
 const RT_EN = {
@@ -2008,6 +2185,12 @@ const RT_EN = {
   cancel: "Cancel",
   min: "min",
   empty: "Set at least one room in `rooms`",
+  autoOn: "enabled",
+  autoOff: "disabled",
+  autoRunning: "running now",
+  autoLast: "last run",
+  autoNever: "never",
+  autoSince: "since",
 };
 
 class AcRoomsCard extends HTMLElement {
@@ -2403,8 +2586,9 @@ class AcRoomsCard extends HTMLElement {
     // tiene, para que el icono de ventana caiga siempre en el mismo x.
     const cols = this._cols();
     const piezas = this._piezas || [];
+    // Las automatizaciones van en la misma columna, antes de los ventiladores.
     const maxFans = cols.has("fans")
-      ? Math.max(1, ...piezas.map((r) => normEntries(r.fans).length))
+      ? Math.max(1, ...piezas.map((r) => normEntries(r.automations).length + normFans(r.fans).length))
       : 1;
     cont.style.setProperty("--acrc-fans", String(maxFans));
 
@@ -2456,7 +2640,23 @@ class AcRoomsCard extends HTMLElement {
       // Ventiladores: se crean una vez, aca, porque son fijos por config
       const slot = fila.querySelector(".fans");
       const btns = [];
-      for (const f of (cols.has("fans") ? normEntries(r.fans) : [])) {
+      const { fans: ventiladores, autos } = splitFans(r);
+      for (const a of (cols.has("fans") ? autos : [])) {
+        const b = document.createElement("button");
+        b.className = "rfan rauto";
+        b.dataset.entity = a.entity;
+        b.dataset.kind = "auto";
+        if (a.color) b.dataset.color = a.color;
+        b.innerHTML = `<ha-icon icon="${a.icon || "mdi:robot-outline"}"></ha-icon>`;
+        b._auto = a;
+        b.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          this._hass.callService("homeassistant", "toggle", { entity_id: a.entity });
+        });
+        slot.appendChild(b);
+        btns.push(b);
+      }
+      for (const f of (cols.has("fans") ? ventiladores : [])) {
         const b = document.createElement("button");
         b.className = "rfan";
         b.dataset.entity = f.entity;
@@ -2584,6 +2784,13 @@ class AcRoomsCard extends HTMLElement {
       }
 
       for (const b of btns) {
+        if (b.dataset.kind === "auto") {
+          const e = autoState(this._hass, b._auto, L, this._lang);
+          b.className = `rfan rauto ${e.clase}`;
+          b.style.color = e.on && b.dataset.color ? b.dataset.color : "";
+          b.title = e.texto;
+          continue;
+        }
         const fst = this._hass.states[b.dataset.entity];
         const fon = !!fst && fst.state === "on";
         b.className = fon ? "rfan on" : "rfan off";
@@ -2694,6 +2901,12 @@ class AcRoomsCard extends HTMLElement {
       .rfan.on ha-icon { animation: acrc-spin 2s linear infinite; }
       .rfan.off { color: var(--info-color, #039be5); }
       @keyframes acrc-spin { to { transform: rotate(360deg); } }
+      .rfan.rauto ha-icon { animation: none; }
+      .rfan.rauto.on, .rfan.rauto.run { color: var(--success-color, #43a047); }
+      .rfan.rauto.run ha-icon { animation: acrc-pulse 1.2s ease-in-out infinite; }
+      .rfan.rauto.off { color: var(--disabled-text-color, #9e9e9e); }
+      .rfan.rauto.na { color: var(--disabled-text-color, #9e9e9e); opacity: .5; }
+      @keyframes acrc-pulse { 50% { opacity: .35; } }
       .ov {
         position: fixed; inset: 0; z-index: 9;
         display: flex; align-items: center; justify-content: center;
@@ -2840,7 +3053,7 @@ class AcRoomsCardEditor extends HTMLElement {
         { value: "lux", label: tr(lang, "Luz", "Light") },
         { value: "window", label: tr(lang, "Ventanas", "Windows") },
         { value: "timer", label: tr(lang, "Temporizador", "Timer") },
-        { value: "fans", label: tr(lang, "Ventiladores y conmutables", "Fans and toggles") },
+        { value: "fans", label: tr(lang, "Automatizaciones y ventiladores", "Automations and fans") },
       ] } } },
       ...(manual ? [] : [
         { name: "exclude", selector: { select: { multiple: true, mode: "list",
