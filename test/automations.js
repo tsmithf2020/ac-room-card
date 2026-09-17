@@ -83,7 +83,7 @@ const VIEJA = {
   ok("activa: clase on, sin girar", b.className === "auto on", b.className);
   ok("con su color propio", b.style.color === "var(--warning-color, #ff9800)", b.style.color);
   ok("va al principio de la linea (position: start)", c._rows.power.querySelector(".preslot").children.includes(b), "");
-  ok("el tooltip dice que esta activa y desde cuando", /Control Verano: activa · desde hace 90 min/.test(b.title), b.title);
+  ok("el tooltip dice que esta activa y desde cuando (90 min = hace 1 h)", /Control Verano: activa · desde hace 1 h$/.test(b.title), b.title);
   calls.length = 0; b._ev.click({ stopPropagation() {} });
   ok("tocarla la activa o desactiva", calls.length === 1 && calls[0].d === "homeassistant" && calls[0].srv === "toggle" &&
      calls[0].data.entity_id === "input_boolean.control_verano_dorm", calls);

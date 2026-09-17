@@ -328,10 +328,11 @@ function hace(iso, lang) {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return null;
   const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  // Truncado, no redondeado: 90 min es "hace 1 h", no "hace 2 h".
   const [n, u] = s < 60 ? [s, "s"]
-    : s < 3600 ? [Math.round(s / 60), "min"]
-    : s < 86400 ? [Math.round(s / 3600), "h"]
-    : [Math.round(s / 86400), "d"];
+    : s < 3600 ? [Math.floor(s / 60), "min"]
+    : s < 86400 ? [Math.floor(s / 3600), "h"]
+    : [Math.floor(s / 86400), "d"];
   return lang === "en" ? `${n} ${u} ago` : `hace ${n} ${u}`;
 }
 
