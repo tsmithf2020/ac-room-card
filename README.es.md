@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.38.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.38.2-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -815,6 +815,24 @@ ver. Las ventanas y las pilas usan la misma lógica verde/naranjo/rojo que la
 tarjeta completa. Bajo 380 px la columna de potencia se oculta para que la línea
 se siga leyendo.
 
+### Opciones de la lista de piezas
+
+| Opción | Tipo | Por defecto | Descripción |
+|---|---|---|---|
+| `title` | string | — | Título sobre la lista. |
+| `rooms` | lista | las del panel | Piezas escritas a mano, cada una con el mismo bloque que `ac-room-card`. Si no la pones, las busca solas. |
+| `discover_view` | string | todo el panel | Busca piezas solo en la vista con ese `path`. |
+| `exclude` | lista | — | Piezas que se dejan fuera, por `name` o por `entity`. Vale también para `rooms` escrito a mano. |
+| `columns` | lista | `temps`, `power`, `window`, `timer`, `fans` | Qué columnas muestra cada línea; también están `plug` y `lux`. |
+| `sort` | string | `configured` | `active` pone arriba las piezas encendidas. |
+| `popup` | bool | `true` | Tocar una pieza abre su tarjeta completa; con `false` abre el diálogo de más información. |
+| `decimals` | number | hasta 1 | Decimales de temperatura de todas las filas; los de cada pieza ganan. |
+| `base_view` | string | la de cada pieza | Vista de arriba del popup para las piezas que no traen la suya. |
+| `labels` | map | — | Reemplaza cualquier texto de la lista. |
+
+La búsqueda encuentra tarjetas dentro de vistas, secciones, pilas y tarjetas que
+envuelven a una sola, como `conditional`.
+
 ### Editar las piezas desde la interfaz
 
 El editor visual de la tarjeta de piezas tiene un selector **Piezas** con dos
@@ -892,6 +910,7 @@ node test/steps.js        # varias escenas por modo y las flechas de temperatura
 node test/vendor.js       # el bloque de mini-climate incluido
 node test/automations.js  # automatizaciones: estado, tooltip, sección del editor y mudanza desde fans
 node test/timer_create.js # el botón Crear temporizador: ayudantes, automatización y config
+node test/robustez.js     # equipo caído al cargar, reconstrucciones limpias, conditional, selector
 ```
 
 Sin navegador: un shim mínimo de DOM prueba el formato de los valores, que los

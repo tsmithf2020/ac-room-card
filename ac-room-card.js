@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "0.38.1";
+const VERSION = "0.38.2";
 
 const T = {
   pwOn: "con corriente",
@@ -358,6 +358,25 @@ function autoState(hass, a, L, lang) {
   return { clase: corriendo ? "run" : on ? "on" : "off", on: on || corriendo, texto: `${nombre}: ${partes.join(" · ")}` };
 }
 
+/* Busca ac-room-card en la config de un dashboard: dentro de vistas,
+   secciones, pilas (`cards`) y tarjetas que envuelven a una sola (`card`,
+   como conditional). */
+function buscarPiezas(o, alEncontrar) {
+  if (Array.isArray(o)) { o.forEach((x) => buscarPiezas(x, alEncontrar)); return; }
+  if (!o || typeof o !== "object") return;
+  if (o.type === "custom:ac-room-card") { alEncontrar(o); return; }
+  if (Array.isArray(o.cards)) buscarPiezas(o.cards, alEncontrar);
+  if (Array.isArray(o.sections)) buscarPiezas(o.sections, alEncontrar);
+  if (o.card && typeof o.card === "object") buscarPiezas(o.card, alEncontrar);
+}
+
+/* Agrega una tarjeta al selector de HA una sola vez, aunque el archivo se
+   cargue dos veces (dos recursos apuntando a copias distintas). */
+function alSelector(entrada) {
+  window.customCards = window.customCards || [];
+  if (!window.customCards.some((c) => c && c.type === entrada.type)) window.customCards.push(entrada);
+}
+
 function moreInfo(el, entityId) {
   if (!entityId) return;
   el.dispatchEvent(new CustomEvent("hass-more-info", {
@@ -485,8 +504,8 @@ class AcRoomCard extends HTMLElement {
     // `entity` ya no es obligatoria: sirve una tarjeta sin equipo de clima,
     // por ejemplo un garage con solo sensor de puerta y ventiladores.
     const algo = config && (config.entity || config.base_card || config.power_entity ||
-      config.lux_entity ||
       config.window_entity || config.temp_entity || config.lux_entity ||
+      normEntries(config.automations).length ||
       (config.fans && config.fans.length) || (config.modes && config.modes.length) ||
       (config.timer && config.timer.entity));
     if (!algo) {
@@ -536,8 +555,36 @@ class AcRoomCard extends HTMLElement {
 
   /* ---------- construccion ---------- */
 
+  /* Lo que _build lee del equipo una sola vez: los modos (botones bajo el
+     termostato) y las velocidades (selector de fan_mode). Si el climate
+     estaba unavailable al montar la tarjeta llegan vacios y, sin esto, no
+     aparecian nunca aunque el equipo volviera. Solo cuenta lo que se usa. */
+  _firmaEquipo() {
+    const cfg = this._config;
+    if (!cfg || domainOf(cfg.entity) !== "climate" || !this._hass) return "";
+    const st = this._hass.states[cfg.entity];
+    const a = (st && st.attributes) || {};
+    const usaModos = resolveView(cfg) === "thermostat" && !cfg.features && cfg.mode_buttons !== false &&
+      !normModes(cfg.modes).length;
+    const modos = usaModos && Array.isArray(a.hvac_modes) ? a.hvac_modes : [];
+    const velocidades = cfg.fan_mode && Array.isArray(a.fan_modes) ? a.fan_modes : [];
+    return modos.length || velocidades.length ? JSON.stringify([modos, velocidades]) : "";
+  }
+
   async _render() {
     if (!this._config || !this._hass) return;
+    // Llegaron modos o velocidades distintos de los que se usaron al construir:
+    // se rehace. Si el equipo se cae (firma vacia) se deja lo dibujado, para
+    // que los botones no parpadeen con cada corte.
+    if (this._built && this._firma !== undefined) {
+      const ahora = this._firmaEquipo();
+      if (ahora && ahora !== this._firma) {
+        this._built = false;
+        this._inner = null;
+        this._innerStyle = undefined;
+        if (this.shadowRoot) this.shadowRoot.innerHTML = "";
+      }
+    }
     if (!this._built) {
       this._built = true; // antes del await, para no construir dos veces
       try {
@@ -556,6 +603,8 @@ class AcRoomCard extends HTMLElement {
   async _build() {
     const cfg = this._config;
     const domain = cfg.entity ? cfg.entity.split(".")[0] : "";
+    // Antes de los await: es la foto del equipo con la que se arma todo.
+    const firma = this._firmaEquipo();
 
     const helpers = await window.loadCardHelpers();
 
@@ -602,6 +651,18 @@ class AcRoomCard extends HTMLElement {
     if (cfg !== this._config) return false;
     this._inner = inner;
     if (inner) inner.hass = this._hass;
+    this._firma = firma;
+    // Una reconstruccion parte de cero: si no, quedaban filas y botones de la
+    // pasada anterior colgando, y la linea de datos se creia con botones.
+    this._rows = {};
+    this._fanBtns = undefined;
+    this._autoBtns = undefined;
+    this._modeBtns = undefined;
+    this._stepper = undefined;
+    this._pwBtn = undefined;
+    this._fanModeEl = undefined;
+    this._fansInline = false;
+    this._soltarEnchufe();
 
     const card = document.createElement("ha-card");
     card.className = "root";
@@ -1357,6 +1418,14 @@ class AcRoomCard extends HTMLElement {
 
   disconnectedCallback() {
     this._tick(false);
+    this._soltarEnchufe();
+  }
+
+  /* El doble toque del enchufe deja un setTimeout de 5 s: al desmontar o
+     reconstruir no debe quedar vivo. */
+  _soltarEnchufe() {
+    if (this._pwTimer) { clearTimeout(this._pwTimer); this._pwTimer = null; }
+    this._pwArmado = false;
   }
 
   _setRow(row, data) {
@@ -1394,9 +1463,8 @@ class AcRoomCard extends HTMLElement {
       .row .tempicon { margin-left: 14px; --mdc-icon-size: 20px; flex: 0 0 auto;
         color: var(--state-icon-color, var(--paper-item-icon-color, #44739e)); }
       .row .temp { margin-left: 4px; font-weight: 500; }
-      .row .win { margin-left: 10px; --mdc-icon-size: 20px; flex: 0 0 auto; }
       .row .winwrap { position: relative; display: inline-flex; margin-left: 10px; }
-      .row .win { margin-left: 0; }
+      .row .win { margin-left: 0; --mdc-icon-size: 20px; flex: 0 0 auto; }
       .row .win.closed  { color: var(--success-color, #43a047); }
       .row .win.some    { color: var(--warning-color, #ffa600); }
       .row .win.open    { color: var(--error-color, #db4437); }
@@ -2641,6 +2709,11 @@ class AcRoomsCard extends HTMLElement {
   disconnectedCallback() {
     this._tick(false);
     this._closePopup();
+    // Lo mismo que en la tarjeta de pieza: el enchufe armado de cada fila.
+    for (const { fila } of this._filas || []) {
+      const b = fila.querySelector(".plug");
+      if (b && b._tmr) { clearTimeout(b._tmr); b._tmr = null; b._armado = false; }
+    }
   }
 
   /* Sin `rooms`, se leen del propio dashboard: cualquier ac-room-card que
@@ -2666,16 +2739,9 @@ class AcRoomsCard extends HTMLElement {
       return [];
     }
     const encontradas = [];
-    const recorrer = (o) => {
-      if (Array.isArray(o)) { o.forEach(recorrer); return; }
-      if (!o || typeof o !== "object") return;
-      if (o.type === "custom:ac-room-card") { encontradas.push(o); return; }
-      if (Array.isArray(o.cards)) recorrer(o.cards);
-      if (Array.isArray(o.sections)) recorrer(o.sections);
-    };
     const vistas = (lov && lov.views ? lov.views : [])
       .filter((v) => !cfg.discover_view || v.path === cfg.discover_view);
-    vistas.forEach(recorrer);
+    buscarPiezas(vistas, (o) => encontradas.push(o));
     return this._filtrar(encontradas);
   }
 
@@ -2779,7 +2845,7 @@ class AcRoomsCard extends HTMLElement {
       });
       fila.querySelector(".win").addEventListener("click", (ev) => {
         ev.stopPropagation();
-      const lista = normEntries(r.window_entity);
+        const lista = normEntries(r.window_entity);
         const abierta = lista.find((x) => {
           const st = this._hass.states[x.entity];
           return st && st.state === "on";
@@ -2812,8 +2878,8 @@ class AcRoomsCard extends HTMLElement {
         const st = this._hass.states[f.entity];
         b.dataset.label = f.name || (st && st.attributes.friendly_name) || f.entity;
         // color propio para el estado encendido; sin esto se usa el verde comun
-    if (f.color) b.dataset.color = f.color;
-    b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>`;
+        if (f.color) b.dataset.color = f.color;
+        b.innerHTML = `<ha-icon icon="${f.icon || "mdi:fan"}"></ha-icon>`;
         b.addEventListener("click", (ev) => {
           ev.stopPropagation();
           this._hass.callService("homeassistant", "toggle", { entity_id: f.entity });
@@ -3155,24 +3221,17 @@ class AcRoomsCardEditor extends HTMLElement {
     const piezas = [];
     const configs = [];
     const vistas = [];
-    const recorrer = (o) => {
-      if (Array.isArray(o)) { o.forEach(recorrer); return; }
-      if (!o || typeof o !== "object") return;
-      if (o.type === "custom:ac-room-card") {
-        const v = o.name || o.entity;
-        if (v && !piezas.includes(v)) {
-          piezas.push(v);
-          const { type, ...resto } = o;
-          configs.push(resto);
-        }
-        return;
+    const anotar = (o) => {
+      const v = o.name || o.entity;
+      if (v && !piezas.includes(v)) {
+        piezas.push(v);
+        const { type, ...resto } = o;
+        configs.push(resto);
       }
-      if (Array.isArray(o.cards)) recorrer(o.cards);
-      if (Array.isArray(o.sections)) recorrer(o.sections);
     };
     for (const v of (lov && lov.views ? lov.views : [])) {
       if (v.path) vistas.push({ value: v.path, label: `${v.title || v.path} (${v.path})` });
-      recorrer(v);
+      buscarPiezas(v, anotar);
     }
     this._opciones = { piezas, vistas, configs };
     return this._opciones;
@@ -3383,8 +3442,7 @@ if (!customElements.get("ac-rooms-card")) {
   customElements.define("ac-rooms-card", AcRoomsCard);
 }
 
-window.customCards = window.customCards || [];
-window.customCards.push({
+alSelector({
   type: "ac-rooms-card",
   name: "AC Rooms Card",
   description: tr(langOf(null), "Vista compacta de varias piezas, una línea por cada una",
@@ -3396,8 +3454,7 @@ if (!customElements.get("ac-room-card")) {
   customElements.define("ac-room-card", AcRoomCard);
 }
 
-window.customCards = window.customCards || [];
-window.customCards.push({
+alSelector({
   type: "ac-room-card",
   name: "AC Room Card",
   description: tr(langOf(null), "Termostato con potencia, energía y sensor de ventana",

@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-0.38.1-blue.svg)
+![version](https://img.shields.io/badge/version-0.38.2-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -794,6 +794,24 @@ want to see. Windows and batteries use the same
 green/orange/red logic as the full card. Below 380 px the power column hides
 itself to keep the line readable.
 
+### Rooms card options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `title` | string | — | Title on top of the list. |
+| `rooms` | list | found on the dashboard | Rooms written by hand, each with the same block as `ac-room-card`. Leave it out to discover them. |
+| `discover_view` | string | whole dashboard | Only discover rooms in the view with this `path`. |
+| `exclude` | list | — | Rooms to leave out, by `name` or `entity`. Also applies to a hand-written `rooms`. |
+| `columns` | list | `temps`, `power`, `window`, `timer`, `fans` | Which columns each line shows; `plug` and `lux` are also available. |
+| `sort` | string | `configured` | `active` puts running rooms on top. |
+| `popup` | bool | `true` | Tapping a room opens its full card; `false` opens more-info instead. |
+| `decimals` | number | up to 1 | Temperature decimals for every row; a room's own wins. |
+| `base_view` | string | each room's own | Top view of the popup for rooms that do not set theirs. |
+| `labels` | map | — | Override any string of the list. |
+
+Discovery finds cards inside views, sections, stacks and single-card wrappers
+such as `conditional`.
+
 ### Editing rooms from the UI
 
 The rooms card's visual editor has a **Rooms** selector with two options:
@@ -869,6 +887,7 @@ node test/steps.js        # several scenes per mode and the temperature arrows
 node test/vendor.js       # the bundled mini-climate block
 node test/automations.js  # automations: state, tooltip, editor section, moving them out of fans
 node test/timer_create.js # the Create timer button: helpers, automation, config
+node test/robustez.js     # unit down at load, clean rebuilds, conditional cards, picker
 ```
 
 No browser: a minimal DOM shim exercises value formatting,
