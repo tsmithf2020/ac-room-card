@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -142,6 +142,7 @@ timer:
 | `modes` | list | no | Cool/heat selector for units without a `climate` entity. Each mode is an `input_boolean`, `switch`, `scene`, `script`, `button` or `input_button`, or several scenes in `steps` for temperature arrows. See [Mode selector](#mode-selector-cool--heat). |
 | `off_entity` | string | no | The `scene`, `script` or button the **Off** button fires, for units whose modes are scenes. See [Mode selector](#mode-selector-cool--heat). |
 | `mode_buttons` | bool | no | Row of HVAC mode buttons under the built-in thermostat. On by default; `false` hides it. See [Mode buttons](#mode-buttons). |
+| `mode_color` | bool | no | Tint the whole card by the running mode (blue cool, orange heat, green dry). On by default. See [Card colour by mode](#card-colour-by-mode). |
 | `base_view` | string | no | What goes on top, pickable in the visual editor: `compact` (mini-climate with Target / Actual labels), `thermostat` (default) or `none`. See [Compact view](#compact-view). |
 | `base_card` | map \| `false` | no | Full config of the card to wrap. Wins over `base_view`. Defaults to the built-in `thermostat`; `false` draws nothing on top. |
 | `base_card_style` | string \| map | no | CSS injected **inside** the wrapped card's shadow DOM. |
@@ -623,6 +624,21 @@ mode_buttons: false   # hide the row
 It is also a toggle in the visual editor. If you set `features:` yourself, your
 list is used instead.
 
+### Card colour by mode
+
+While the unit runs, the whole card takes the tint of what it is doing — the
+same as the rows of the rooms list: **light blue cooling, orange heating, green
+drying**. Off, it stays neutral. No need to open it to know.
+
+For IR units the mode comes from the running mode's name and its scenes: *heat*,
+*hot*, *calor* or *calef* mean heating; *cool*, *cold* or *frío* mean cooling. So
+a scene called *AireLiving23hotTurbSwing* tints it orange. When the names do not
+say it, set `hvac: heat` (or `cool`, `dry`) on the mode.
+
+```yaml
+mode_color: false   # keep the card neutral
+```
+
 ---
 
 ## Wrapping another card
@@ -888,6 +904,7 @@ node test/vendor.js       # the bundled mini-climate block
 node test/automations.js  # automations: state, tooltip, editor section, moving them out of fans
 node test/timer_create.js # the Create timer button: helpers, automation, config
 node test/robustez.js     # unit down at load, clean rebuilds, conditional cards, picker
+node test/mode_color.js   # the card tinted by the running mode
 ```
 
 No browser: a minimal DOM shim exercises value formatting,

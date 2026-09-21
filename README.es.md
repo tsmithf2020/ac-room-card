@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -146,6 +146,7 @@ timer:
 | `modes` | lista | no | Selector frío/calor para aires sin entidad `climate`. Cada modo es un `input_boolean`, `switch`, `scene`, `script`, `button` o `input_button`, o varias escenas en `steps` para las flechas de temperatura. Ver [Selector de modo](#selector-de-modo-frío--calor). |
 | `off_entity` | string | no | La escena, script o botón que dispara el botón **Apagado**, para aires cuyos modos son escenas. Ver [Selector de modo](#selector-de-modo-frío--calor). |
 | `mode_buttons` | bool | no | Fila de botones de modo bajo el termostato integrado. Activa por defecto; `false` la oculta. Ver [Botones de modo](#botones-de-modo). |
+| `mode_color` | bool | no | Tiñe la tarjeta entera según el modo en marcha (celeste frío, naranjo calor, verde seco). Activo por defecto. Ver [Color de la tarjeta según el modo](#color-de-la-tarjeta-según-el-modo). |
 | `base_view` | string | no | Lo que va arriba, elegible en el editor visual: `compact` (mini-climate con rótulos Target / Actual), `thermostat` (por defecto) o `none`. Ver [Vista compacta](#vista-compacta). |
 | `base_card` | map \| `false` | no | Config completa de la tarjeta que se envuelve. Gana sobre `base_view`. Por defecto es el `thermostat` integrado; `false` no dibuja nada arriba. |
 | `base_card_style` | string \| map | no | CSS que se inyecta **dentro** del shadow DOM de la tarjeta envuelta. |
@@ -638,6 +639,22 @@ mode_buttons: false   # oculta la fila
 También es un interruptor en el editor visual. Si pones `features:` tú mismo, se
 usa tu lista en su lugar.
 
+### Color de la tarjeta según el modo
+
+Mientras el aire funciona, la tarjeta entera toma el tono de lo que está
+haciendo, igual que las filas de la lista de piezas: **celeste enfriando,
+naranjo calentando, verde en seco**. Apagado, queda neutra. No hace falta abrirla
+para saberlo.
+
+En los aires por IR el modo sale del nombre del modo en marcha y de sus escenas:
+*heat*, *hot*, *calor* o *calef* es calefacción; *cool*, *cold* o *frío* es frío.
+Así, una escena que se llama *AireLiving23hotTurbSwing* la pinta naranja. Si los
+nombres no lo dicen, pon `hvac: heat` (o `cool`, `dry`) en el modo.
+
+```yaml
+mode_color: false   # deja la tarjeta neutra
+```
+
 ---
 
 ## Envolver otra tarjeta
@@ -911,6 +928,7 @@ node test/vendor.js       # el bloque de mini-climate incluido
 node test/automations.js  # automatizaciones: estado, tooltip, sección del editor y mudanza desde fans
 node test/timer_create.js # el botón Crear temporizador: ayudantes, automatización y config
 node test/robustez.js     # equipo caído al cargar, reconstrucciones limpias, conditional, selector
+node test/mode_color.js   # la tarjeta teñida según el modo en marcha
 ```
 
 Sin navegador: un shim mínimo de DOM prueba el formato de los valores, que los

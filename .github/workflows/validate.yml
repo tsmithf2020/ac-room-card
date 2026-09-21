@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      # Nueve suites: cada una lleva su propia cadena de promesas.
+      # Diez suites: cada una lleva su propia cadena de promesas.
       - run: node test/smoke.js
       - run: node test/discover.js
       - run: node test/base_view.js
@@ -37,6 +37,7 @@ jobs:
       - run: node test/automations.js
       - run: node test/timer_create.js
       - run: node test/robustez.js
+      - run: node test/mode_color.js
       # El mini-climate incluido tiene que ser byte a byte el de su release.
       - run: node scripts/vendor-mini-climate.mjs --check
       # Solo avisa: actualizar la copia es una decision, no un fallo.

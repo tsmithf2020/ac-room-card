@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 const T = {
   pwOn: "con corriente",
@@ -310,6 +310,31 @@ function stepModeFor(hass, modes, offEntity, dir) {
   if (j < 0 || j >= pasos.length) return false;
   fireEntity(hass, pasos[j].entity, true);
   return true;
+}
+
+/* Modo en marcha, para pintar la tarjeta y la fila de la lista. Con climate
+   es su estado; con modos se deduce del nombre del modo y de sus escenas
+   ("Calor", "AireLiving23hot...", "frio"...), o se declara con `hvac` en el
+   modo. null si esta apagado o no se sabe. */
+function modoEnMarcha(hass, cfg) {
+  const c = cfg || {};
+  const modos = normModes(c.modes);
+  if (modos.length) {
+    const activo = modos[activeModeIndex(hass, modos, c.off_entity)];
+    if (!activo) return null;
+    if (activo.hvac) return activo.hvac;
+    const ids = modeSteps(hass, activo).map((p) => {
+      const st = hass.states[p.entity];
+      return `${p.entity} ${(st && st.attributes.friendly_name) || ""}`;
+    }).join(" ");
+    const txt = `${activo.name || ""} ${ids}`.toLowerCase();
+    if (/heat|hot|calor|calef/.test(txt)) return "heat";
+    if (/cool|cold|frio|frío/.test(txt)) return "cool";
+    return null;
+  }
+  const st = c.entity && hass.states[c.entity];
+  if (!st || ["off", "unavailable", "unknown"].includes(st.state)) return null;
+  return st.state;
 }
 
 /* Sin boolean que apagar ni off_entity, el boton Apagado no haria nada. */
@@ -666,6 +691,7 @@ class AcRoomCard extends HTMLElement {
 
     const card = document.createElement("ha-card");
     card.className = "root";
+    this._cardEl = card;
 
     if (cfg.name) {
       const head = document.createElement("div");
@@ -1041,6 +1067,16 @@ class AcRoomCard extends HTMLElement {
     this._updatePowerSwitch();
     this._updateModes();
     this._updateTimer();
+    this._updateTinte();
+  }
+
+  /* La tarjeta entera se tine segun el modo en marcha, como las filas de la
+     lista: celeste enfriando, naranjo calentando, verde en seco. Asi se sabe
+     que esta haciendo el aire sin tocarlo. `mode_color: false` lo apaga. */
+  _updateTinte() {
+    if (!this._cardEl) return;
+    const modo = this._config.mode_color === false ? null : modoEnMarcha(this._hass, this._config);
+    this._cardEl.className = "root" + (modo ? ` m-${modo}` : "");
   }
 
   /* ---------- ventanas ---------- */
@@ -1440,7 +1476,11 @@ class AcRoomCard extends HTMLElement {
   _style() {
     const s = document.createElement("style");
     s.textContent = `
-      .root { overflow: hidden; }
+      .root { overflow: hidden; transition: background-color .3s ease; }
+      /* Mismos tonos que las filas de la lista, sobre el fondo de la tarjeta. */
+      .root.m-cool { background: color-mix(in srgb, var(--info-color, #039be5) 13%, var(--ha-card-background, var(--card-background-color, #fff))); }
+      .root.m-heat { background: color-mix(in srgb, var(--warning-color, #ff9800) 15%, var(--ha-card-background, var(--card-background-color, #fff))); }
+      .root.m-dry  { background: color-mix(in srgb, var(--success-color, #43a047) 10%, var(--ha-card-background, var(--card-background-color, #fff))); }
       .inner { display: block; }
       .header {
         display: flex; align-items: center; gap: 8px;
@@ -2506,20 +2546,7 @@ class AcRoomsCard extends HTMLElement {
      con modos por input_boolean se deduce del nombre o del entity_id, o se
      puede declarar a mano con `hvac` en cada modo. */
   _hvac(r) {
-    const modos = this._modos(r);
-    if (modos.length) {
-      const activo = modos[activeModeIndex(this._hass, modos, r.off_entity)];
-      if (!activo) return null;
-      if (activo.hvac) return activo.hvac;
-      const ids = modeSteps(this._hass, activo).map((p) => p.entity).join(" ");
-      const txt = ((activo.name || "") + " " + ids).toLowerCase();
-      if (/heat|calor|calef/.test(txt)) return "heat";
-      if (/cool|frio|fr\u00edo|cold/.test(txt)) return "cool";
-      return null;
-    }
-    const st = this._hass.states[r.entity];
-    if (!st || ["off", "unavailable", "unknown"].includes(st.state)) return null;
-    return st.state;
+    return modoEnMarcha(this._hass, r);
   }
 
   _toggle(r) {
