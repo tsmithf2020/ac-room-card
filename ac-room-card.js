@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 
 const T = {
   pwOn: "con corriente",
@@ -336,6 +336,13 @@ function modoEnMarcha(hass, cfg) {
   if (!st || ["off", "unavailable", "unknown"].includes(st.state)) return null;
   return st.state;
 }
+
+/* Color de acento por modo: el del icono de modo de mini-climate. */
+const MODE_ACCENT = {
+  cool: "var(--info-color, #039be5)",
+  heat: "var(--amber-color, #ffc107)",
+  dry: "var(--success-color, #43a047)",
+};
 
 /* Sin boolean que apagar ni off_entity, el boton Apagado no haria nada. */
 const canTurnOff = (modes, offEntity) =>
@@ -1077,6 +1084,16 @@ class AcRoomCard extends HTMLElement {
     if (!this._cardEl) return;
     const modo = this._config.mode_color === false ? null : modoEnMarcha(this._hass, this._config);
     this._cardEl.className = "root" + (modo ? ` m-${modo}` : "");
+    // Y el icono del modo de mini-climate (y sus otros acentos) toma el color
+    // del modo: azul frio, amarillo calor, verde seco. mini-climate lee
+    // --mini-climate-accent-color en su :host; puesto en linea en el
+    // elemento gana. Apagado se quita y vuelve a su naranjo de siempre.
+    const inner = this._inner;
+    if (inner && inner.style) {
+      const color = MODE_ACCENT[modo];
+      if (color) inner.style.setProperty("--mini-climate-accent-color", color);
+      else if (typeof inner.style.removeProperty === "function") inner.style.removeProperty("--mini-climate-accent-color");
+    }
   }
 
   /* ---------- ventanas ---------- */

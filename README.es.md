@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇬🇧 [Read this in English](README.md)
@@ -645,6 +645,12 @@ Mientras el aire funciona, la tarjeta entera toma el tono de lo que está
 haciendo, igual que las filas de la lista de piezas: **celeste enfriando,
 naranjo calentando, verde en seco**. Apagado, queda neutra. No hace falta abrirla
 para saberlo.
+
+Con mini-climate arriba (la vista compacta, o tu propio `base_card`), su ícono de
+modo también sigue el modo: **azul enfriando, amarillo calentando, verde en
+seco**, y vuelve a su color de siempre al apagar. La tarjeta ajusta la variable
+`--mini-climate-accent-color` del propio mini-climate, así que sus otros acentos
+toman el mismo color.
 
 En los aires por IR el modo sale del nombre del modo en marcha y de sus escenas:
 *heat*, *hot*, *calor* o *calef* es calefacción; *cool*, *cold* o *frío* es frío.

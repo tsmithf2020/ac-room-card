@@ -52,7 +52,11 @@ const hass = {
 
 (async () => {
   global.window.loadCardHelpers = async () => ({
-    createCardElement: async () => { const e = makeEl("card"); e.shadowRoot = null; return e; },
+    createCardElement: async () => {
+      const e = makeEl("card"); e.shadowRoot = null;
+      e.style.removeProperty = function (k) { delete this._vars[k]; };
+      return e;
+    },
   });
   const armar = async (cfg) => {
     const c = new CARD(); c.setConfig(cfg); c._hass = hass;
@@ -73,8 +77,23 @@ const hass = {
   ok("no disponible: sin tinte", c._cardEl.className === "root", c._cardEl.className);
   hass.states["climate.dorm"].state = "cool";
 
+  console.log("\n--- el icono de modo de mini-climate");
+  const acento = (k) => k._inner.style.getPropertyValue("--mini-climate-accent-color");
+  c._update();
+  ok("frio: azul", acento(c) === "var(--info-color, #039be5)", acento(c));
+  hass.states["climate.dorm"].state = "heat"; c._update();
+  ok("calor: amarillo", acento(c) === "var(--amber-color, #ffc107)", acento(c));
+  hass.states["climate.dorm"].state = "dry"; c._update();
+  ok("seco: verde", acento(c) === "var(--success-color, #43a047)", acento(c));
+  hass.states["climate.dorm"].state = "off"; c._update();
+  ok("apagado: vuelve al color de mini-climate", acento(c) === undefined, acento(c));
+  hass.states["climate.dorm"].state = "cool";
+  const propio = await armar({ entity: "climate.dorm", base_card: { type: "custom:mini-climate" } });
+  ok("tambien con un mini-climate escrito a mano (base_card)", acento(propio) === "var(--info-color, #039be5)", acento(propio));
+
   const sin = await armar({ entity: "climate.dorm", mode_color: false });
   ok("mode_color: false lo apaga", sin._cardEl.className === "root", sin._cardEl.className);
+  ok("y deja el icono con su color de siempre", acento(sin) === undefined, acento(sin));
 
   console.log("\n--- aire por IR con escenas");
   const LIVING = { name: "Living", off_entity: "scene.airelivingoff", modes: [
