@@ -1,7 +1,7 @@
 # AC Room Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-1.2.0-blue.svg)
+![version](https://img.shields.io/badge/version-1.2.1-blue.svg)
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 > 🇪🇸 [Léeme en español](README.es.md)
@@ -630,10 +630,11 @@ While the unit runs, the whole card takes the tint of what it is doing — the
 same as the rows of the rooms list: **light blue cooling, orange heating, green
 drying**. Off, it stays neutral. No need to open it to know.
 
-With mini-climate on top (the compact view, or your own `base_card`), its mode
-icon follows too: **blue cooling, yellow heating, green drying**, back to its
-usual colour when off. The card sets mini-climate's own
-`--mini-climate-accent-color`, so its other accents follow the same colour.
+With mini-climate on top (the compact view, or your own `base_card`), its active
+icons — the mode and the fan — follow too: **blue cooling, yellow heating, green
+drying**. The card sets, on that mini-climate only, the theme variable it takes
+that colour from (`--state-binary_sensor-active-color`), plus
+`--mini-climate-accent-color` for its other accents.
 
 For IR units the mode comes from the running mode's name and its scenes: *heat*,
 *hot*, *calor* or *calef* mean heating; *cool*, *cold* or *frío* mean cooling. So

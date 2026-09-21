@@ -7,7 +7,7 @@
  * a traves de loadCardHelpers(). Licencia MIT (ver LICENSE).
  */
 
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 
 const T = {
   pwOn: "con corriente",
@@ -337,12 +337,15 @@ function modoEnMarcha(hass, cfg) {
   return st.state;
 }
 
-/* Color de acento por modo: el del icono de modo de mini-climate. */
+/* Color por modo de los iconos activos de mini-climate. */
 const MODE_ACCENT = {
   cool: "var(--info-color, #039be5)",
   heat: "var(--amber-color, #ffc107)",
   dry: "var(--success-color, #43a047)",
 };
+// La primera pinta los iconos activos (el del modo y el del ventilador); la
+// segunda, el resto de sus acentos (la flecha abierta, el texto elegido).
+const MODE_ACCENT_VARS = ["--state-binary_sensor-active-color", "--mini-climate-accent-color"];
 
 /* Sin boolean que apagar ni off_entity, el boton Apagado no haria nada. */
 const canTurnOff = (modes, offEntity) =>
@@ -1084,15 +1087,21 @@ class AcRoomCard extends HTMLElement {
     if (!this._cardEl) return;
     const modo = this._config.mode_color === false ? null : modoEnMarcha(this._hass, this._config);
     this._cardEl.className = "root" + (modo ? ` m-${modo}` : "");
-    // Y el icono del modo de mini-climate (y sus otros acentos) toma el color
-    // del modo: azul frio, amarillo calor, verde seco. mini-climate lee
-    // --mini-climate-accent-color en su :host; puesto en linea en el
-    // elemento gana. Apagado se quita y vuelve a su naranjo de siempre.
+    // Y los iconos activos de mini-climate (el del modo y el del ventilador)
+    // toman el color del modo: azul frio, amarillo calor, verde seco.
+    // Probado en un navegador contra mini-climate 3.4.0: esos iconos se
+    // pintan con `ha-icon-button[color] { color: var(--mc-icon-active-color)
+    // !important }`, y su :host saca ese valor de la variable de tema
+    // --state-binary_sensor-active-color. --mini-climate-accent-color (lo
+    // que usaba la 1.2.0) no los toca. Puesta en linea en el elemento gana
+    // a su :host; apagado se quita y vuelve a su amarillo de siempre.
     const inner = this._inner;
     if (inner && inner.style) {
       const color = MODE_ACCENT[modo];
-      if (color) inner.style.setProperty("--mini-climate-accent-color", color);
-      else if (typeof inner.style.removeProperty === "function") inner.style.removeProperty("--mini-climate-accent-color");
+      for (const v of MODE_ACCENT_VARS) {
+        if (color) inner.style.setProperty(v, color);
+        else if (typeof inner.style.removeProperty === "function") inner.style.removeProperty(v);
+      }
     }
   }
 

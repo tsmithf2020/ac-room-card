@@ -78,9 +78,14 @@ const hass = {
   hass.states["climate.dorm"].state = "cool";
 
   console.log("\n--- el icono de modo de mini-climate");
-  const acento = (k) => k._inner.style.getPropertyValue("--mini-climate-accent-color");
+  // Lo que de verdad pinta sus iconos activos (probado en navegador contra
+  // mini-climate 3.4.0): --state-binary_sensor-active-color. La 1.2.0 solo
+  // ponia --mini-climate-accent-color, que a esos iconos no los toca.
+  const acento = (k) => k._inner.style.getPropertyValue("--state-binary_sensor-active-color");
   c._update();
   ok("frio: azul", acento(c) === "var(--info-color, #039be5)", acento(c));
+  ok("y el resto de sus acentos tambien",
+     c._inner.style.getPropertyValue("--mini-climate-accent-color") === "var(--info-color, #039be5)", "");
   hass.states["climate.dorm"].state = "heat"; c._update();
   ok("calor: amarillo", acento(c) === "var(--amber-color, #ffc107)", acento(c));
   hass.states["climate.dorm"].state = "dry"; c._update();
